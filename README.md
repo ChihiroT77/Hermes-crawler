@@ -144,7 +144,9 @@ powershell -NoProfile -ExecutionPolicy Bypass -File install.ps1
 <details>
 <summary><b>dsh</b>（点开看步骤）</summary>
 
-dsh 用的是插件，不是 MCP 配置。仓库里的 `dsh-plugin/` 还没做完，**暂时建议先用 MCP 方式接**，配法和上面 Trae 一样。
+dsh 用的是插件，不是 MCP 配置。插件在仓库的 `dsh-plugin/` 里，11 个工具和 MCP 版一一对应（含 `hermes_wait` 等任务跑完）。
+
+不过这个外壳**没在真实的 dsh 里验证过**，所以出问题请先用 MCP 方式接（配法和上面 Trae 一样）。
 
 </details>
 
@@ -310,12 +312,14 @@ Hermes/
 ├── newfiles/                新增文件（封装层，原项目里没有的）
 │   ├── agent_crawler/       核心：命令行、MCP 服务、文档
 │   └── tools/               Excel 导出
-├── dsh-plugin/              dsh 插件版（实验性，未完成，见下）
+├── dsh-plugin/              dsh 插件版（实验性，见下）
 ├── VERSION                  版本号
 └── LICENSE-NOTICE.md        许可证说明
 ```
 
-**关于 `dsh-plugin/`：** 这里是把同一套内核包成 dsh 插件外壳的版本（工具名 `hermes_*`）。它只对 dsh 有效，其他 MCP 客户端用不上，目前**还没做完**，暂时不建议使用。常规使用请看上面的 MCP 配置。
+**关于 `dsh-plugin/`：** 这里是把同一套内核包成 dsh 插件外壳的版本（工具名 `hermes_*`，共 11 个）。它只对 dsh 有效，其他 MCP 客户端用不上。
+
+工具已经齐了（`hermes_run` 点火、`hermes_wait` 等结果、`hermes_status` 看进度…），但**没在真实的 dsh 环境里跑过**——我只能在本机模拟 dsh 的工具注册表验证逻辑，装进 dsh 由 AI 真正调用这一步验不了。所以定位是「实验性」：能用 MCP 就先用 MCP，dsh 这条等有人实际用过反馈。
 
 ---
 
