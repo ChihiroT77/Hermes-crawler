@@ -7,7 +7,7 @@
  * 设计上的三条硬规矩：
  *   1. 不重写业务逻辑 —— 外壳只负责"拼命令行 + 收 JSON"，判断"能不能爬"交给内核。
  *   2. 不让插件崩掉会话 —— 内核没装好时，工具返回一句人话，而不是抛异常。
- *   3. 一次调用只干一件事 —— 长任务交给内核的后台模式，再用 status 去看，
+ *   3. 一次调用只干一件事 —— 长任务交给内核的后台模式，status 看进度、wait 等结果，
  *      免得 AI 卡在"到底跑完没有"上。
  *
  * @module dsh-hermes
@@ -32,6 +32,8 @@ const TIMEOUT = {
   version: 30_000,
   defaults: 30_000,
   status: 90_000,
+  /** 等任务时每一轮查状态的超时（比 status 略宽，避免排队时误判）。 */
+  waitPoll: 120_000,
   loginCheck: 120_000,
   estimate: 90_000,
   cancel: 150_000,
@@ -260,6 +262,88 @@ async function invoke(ctx0, cmdArgs, timeoutMs, build) {
   return envelope(json, json && typeof json === 'object' ? build(json) : { ok: false, status: '', summary: '' }, fallback)
 }
 
+/**
+ * 盯一个任务，直到它跑完或到时间。
+ *
+ * 为什么要有：hermes_run 默认是"点火即返回"，AI 拿到一句"已启动"就断在这儿了，
+ * 用户还得自己再问一遍"跑完了吗"。这个函数把"等"搬进工具调用里，跑完一次性拿到结论。
+ *
+ * 实现上不碰任务目录、不读日志，只反复调 status --task 看 finished 这个字段。
+ * 超时到点就返回一次现状（不是失败），AI 可以再调一次接着等。
+ *
+ * @param {object} ctx0 { paths, exec }
+ * @param {string} task 任务名（可片段）或任务目录
+ * @param {number} timeoutSec 最多等几秒
+ * @param {number} intervalSec 每隔几秒查一次
+ * @returns {Promise<object>} 内核 status --task 的原始 JSON（可能被补上 timeout_reached/waited_sec/polls）
+ */
+async function waitForTask(ctx0, task, timeoutSec, intervalSec) {
+  const started = Date.now()
+  let polls = 0
+  for (;;) {
+    ctx0.exec?.signal?.throwIfAborted()
+    const { json, stderr, code, timedOut } = await runJson(
+      ctx0.paths.pythonPath,
+      [ctx0.paths.scriptPath, 'status', '--task', task, '--json'],
+      TIMEOUT.waitPoll,
+      ctx0.exec?.signal,
+    )
+    polls += 1
+    if (json === null || typeof json !== 'object') {
+      const elapsed = Date.now() - started
+      // 刚启动那几秒可能连解释器都还没热起来，别一次读不懂就判死
+      if (elapsed < 20_000) {
+        await sleep(Math.min(intervalSec, 3) * 1000, ctx0.exec?.signal)
+        continue
+      }
+      return {
+        ok: false,
+        query: task,
+        reason: timedOut
+          ? '查状态这一步自己超时了'
+          : notInstalledHint(ctx0.paths, stderr) || `内核没有返回可读结果（退出码 ${code}）`,
+      }
+    }
+    if (json.ok !== true) {
+      // 找不到任务目录：刚开始那几秒目录可能还没建出来，给一点宽限
+      if (Date.now() - started < 20_000) {
+        await sleep(intervalSec * 1000, ctx0.exec?.signal)
+        continue
+      }
+      return json
+    }
+    if (json.finished === true) return json
+    if (Date.now() - started >= timeoutSec * 1000) {
+      return {
+        ...json,
+        timeout_reached: true,
+        waited_sec: Math.round((Date.now() - started) / 100) / 10,
+        polls,
+      }
+    }
+    await sleep(intervalSec * 1000, ctx0.exec?.signal)
+  }
+}
+
+/** 可被中止的睡眠：等任务时用户按停止要能立刻退出，不能干睡。 */
+function sleep(ms, signal) {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(Object.assign(new Error('aborted'), { name: 'AbortError' }))
+      return
+    }
+    const timer = setTimeout(() => {
+      signal?.removeEventListener?.('abort', onAbort)
+      resolve()
+    }, ms)
+    function onAbort() {
+      clearTimeout(timer)
+      reject(Object.assign(new Error('aborted'), { name: 'AbortError' }))
+    }
+    signal?.addEventListener?.('abort', onAbort, { once: true })
+  })
+}
+
 /* -------------------------------------------------------------------------- */
 /* 各工具的结论生成（把内核 JSON 翻成人话）                                        */
 /* -------------------------------------------------------------------------- */
@@ -307,6 +391,41 @@ function summarizeStatus(j) {
     lines.push('还没有跑过任何任务。')
   }
   return { ok: true, status: lock.held && lock.alive ? '有任务在跑' : '空闲', summary: lines.join('\n') }
+}
+
+/** wait：等到了就报结果，没等到就说明白"还在跑、可以再等一次"。 */
+function summarizeWait(j) {
+  if (j.ok !== true) {
+    const tried = Array.isArray(j.tried) && j.tried.length > 0
+      ? `\n我按顺序找过这些地方：\n${j.tried.map((t) => `  - ${t}`).join('\n')}`
+      : ''
+    return {
+      ok: false,
+      status: statusOf(j) || '等不到任务',
+      summary: `等不到任务「${j.query || ''}」：${reasonOf(j) || '内核没给原因'}${tried}`
+        + '\n任务名可以只给片段；刚启动的任务目录可能还没建出来，隔几秒再调一次。',
+    }
+  }
+  const task = j.name || j.query || ''
+  const got = `内容 ${j.contents} 条 / 请求 ${j.requested} 条（${j.percent}%）`
+    + (j.comments ? `，评论 ${j.comments} 条` : '')
+  if (j.finished === true) {
+    const lines = [`跑完了｜任务「${task}」｜${j.status || '结束'}｜${got}`]
+    if (reasonOf(j)) lines.push(`原因：${j.reason}（${j.reason_kind || ''}）`)
+    if (j.task_dir) lines.push(`任务目录：${j.task_dir}`)
+    if (!j.comments && j.want_comments) lines.push('这次没拿到评论（可能被风控拦了，也可能确实没有）。')
+    lines.push('要交付表格的话，接着调 hermes_export。')
+    return { ok: true, status: j.status || '已结束', summary: lines.join('\n') }
+  }
+  // 到时间了还没跑完
+  const waited = typeof j.waited_sec === 'number' ? j.waited_sec : 0
+  const lines = [
+    `还在跑｜任务「${task}」｜已等 ${waited} 秒｜${got}`,
+    j.progress ? `当前进度：${j.progress}` : '',
+    j.running === false && !j.status ? '进程不在了但还没写出结论，可能在收尾或中断了。' : '',
+    '可以再调一次 hermes_wait 接着等；想看细节用 hermes_status；想放弃用 hermes_cancel（数据不会丢）。',
+  ].filter(Boolean)
+  return { ok: true, status: statusOf(j) || '进行中', summary: lines.join('\n') }
 }
 
 /** defaults：列出来，或者报"改了哪几个"。 */
@@ -371,7 +490,8 @@ function summarizeRun(j) {
     const lines = [
       `${j.status}｜任务「${j.task}」｜平台 ${j.platform}｜请求 ${j.requested} 条`,
       j.note || '',
-      `看进度：再调 hermes_status（task 填「${j.task}」）`,
+      `等结果：紧接着调 hermes_wait（task 填「${j.task}」）`,
+      `只想瞄一眼进度：调 hermes_status`,
       `想停：调 hermes_cancel`,
     ].filter(Boolean)
     return { ok: true, status: statusOf(j), summary: lines.join('\n') }
@@ -398,7 +518,7 @@ function summarizeBatch(j) {
     return {
       ok: true,
       status: statusOf(j),
-      summary: [`${j.status}｜${j.note || ''}`, `看进度：调 hermes_status（不填 task 看整条队列）`, '想停：调 hermes_cancel'].join('\n'),
+      summary: [`${j.status}｜${j.note || ''}`, '等结果：紧接着调 hermes_wait（每跑完一个就报一个）', '只想看进度：调 hermes_status（不填 task 看整条队列）', '想停：调 hermes_cancel'].join('\n'),
     }
   }
   const lines = [`队列跑完：${j.ok_count}/${j.total} 个任务拿到数据。`]
@@ -419,7 +539,7 @@ function summarizeResume(j) {
     return {
       ok: true,
       status: statusOf(j),
-      summary: [`${j.status}｜${j.note || ''}`, `看进度：调 hermes_status（task 填「${j.task}」）`, '想停：调 hermes_cancel'].join('\n'),
+      summary: [`${j.status}｜${j.note || ''}`, `等结果：紧接着调 hermes_wait（task 填「${j.task}」）`, '想停：调 hermes_cancel'].join('\n'),
     }
   }
   const lines = [
@@ -585,7 +705,49 @@ function createTools(opts) {
       },
     }),
 
-    /* ------------------------------ 3. 默认值 ------------------------------ */
+    /* ------------------------------ 3. 等任务 ------------------------------ */
+    makeTool({
+      name: 'hermes_wait',
+      description:
+        '盯着一个任务，等它跑完再返回结果（中文：等任务跑完；English: wait until a task finishes, then return the result）。'
+        + '**hermes_run 之后应该紧接着调这个**，别让用户自己去问"跑完了吗"。'
+        + '最多等 timeout 秒（默认 300）；返回里 finished=true 才算真跑完（成功/失败/取消都算），'
+        + 'false 表示到时间了还没完，可以再调一次接着等。'
+        + '等的同时用户能按停止，会立刻退出且不影响后台任务。',
+      parameters: {
+        type: 'object',
+        properties: {
+          task: { type: 'string', description: '任务名（可以只给片段）或任务目录路径' },
+          timeout: { type: 'integer', description: '最多等几秒，默认 300（5 分钟），上限 540' },
+          interval: { type: 'integer', description: '每隔几秒查一次，默认 5 秒，上限 60' },
+        },
+        required: ['task'],
+        additionalProperties: false,
+      },
+      execute: async (args, exec) => {
+        exec?.signal?.throwIfAborted()
+        const task = typeof args.task === 'string' ? args.task.trim() : ''
+        if (task === '') {
+          return {
+            ok: false,
+            status: '缺参数',
+            summary: '没说要等哪个任务：把任务名（可以只给片段）或任务目录路径填进 task。',
+            error: 'missing task',
+            detail: {},
+          }
+        }
+        const timeoutSec = typeof args.timeout === 'number' && Number.isFinite(args.timeout)
+          ? Math.max(1, Math.min(Math.trunc(args.timeout), 540))
+          : 300
+        const intervalSec = typeof args.interval === 'number' && Number.isFinite(args.interval)
+          ? Math.max(1, Math.min(Math.trunc(args.interval), 60))
+          : 5
+        const json = await waitForTask({ paths, exec }, task, timeoutSec, intervalSec)
+        return envelope(json, summarizeWait(json), '没等到结果：内核没有返回可读内容。')
+      },
+    }),
+
+    /* ------------------------------ 4. 默认值 ------------------------------ */
     makeTool({
       name: 'hermes_defaults',
       description:
@@ -611,7 +773,7 @@ function createTools(opts) {
       },
     }),
 
-    /* ------------------------------ 4. 查登录 ------------------------------ */
+    /* ------------------------------ 5. 查登录 ------------------------------ */
     makeTool({
       name: 'hermes_login',
       description:
@@ -633,7 +795,7 @@ function createTools(opts) {
       },
     }),
 
-    /* ------------------------------ 5. 预估 ------------------------------- */
+    /* ------------------------------ 6. 预估 ------------------------------- */
     makeTool({
       name: 'hermes_estimate',
       description:
@@ -653,13 +815,13 @@ function createTools(opts) {
       },
     }),
 
-    /* ------------------------------ 6. 开跑 ------------------------------- */
+    /* ------------------------------ 7. 开跑 ------------------------------- */
     makeTool({
       name: 'hermes_run',
       description:
         '真去爬一个任务（中文：开始爬取；English: start one crawler task）。'
-        + '默认后台跑：十几秒内返回"已启动"，然后你用 hermes_status 看进度——推荐，因为爬取常常几十分钟，前台干等会超时。'
-        + '把 detach 设成 false 才是前台等它跑完（最多等 30 分钟，且会占着这次对话）。'
+        + '默认后台跑：十几秒内返回"已启动"，然后紧接着调 hermes_wait 等结果——推荐，因为爬取常常几十分钟，前台干等会超时。'
+        + '只想瞄一眼进度可以用 hermes_status；把 detach 设成 false 才是前台一次等满（最多 30 分钟，且会占着这次对话）。'
         + '跑完数据落在任务目录里；要 Excel 交付再调 hermes_export。',
       parameters: {
         type: 'object',
@@ -671,7 +833,7 @@ function createTools(opts) {
           retries: { type: 'integer', description: '遇到网络类错误自动重试几次，0~3' },
           wait_lock: { type: 'number', description: '别人正在跑时最多等几分钟；默认 0 = 不抢，直接告诉你忙' },
           probe: { type: 'boolean', description: '开跑前先探一次票（多花 20~40 秒换"别白跑几十分钟"）；不给就自动判断' },
-          detach: { type: 'boolean', description: 'true（默认）=后台跑立刻返回；false=前台等它跑完' },
+          detach: { type: 'boolean', description: 'true（默认）=后台跑立刻返回，之后用 hermes_wait 等结果；false=前台一次等满' },
         },
         required: ['platform', 'keywords'],
         additionalProperties: false,
@@ -697,7 +859,7 @@ function createTools(opts) {
       description:
         '一次性提交多个爬取任务，排队跑（中文：批量；English: queue several crawler tasks）。'
         + '给 tasks 数组，每项和 hermes_run 的参数同名（platform、keywords、count…）。'
-        + '默认后台跑整条队列，返回后可用 hermes_status 看进度。适合"这几个关键词/几个平台一起跑"。',
+        + '默认后台跑整条队列，返回后紧接着调 hermes_wait 等结果。适合"这几个关键词/几个平台一起跑"。',
       parameters: {
         type: 'object',
         properties: {
@@ -746,7 +908,7 @@ function createTools(opts) {
       description:
         '接着一个没跑完的旧任务继续抓：按关键词补抓、再按内容 ID 去重合并（中文：断点续跑；English: resume an unfinished task with dedup merge）。'
         + '比重新开一个任务划算——已经抓到的不重复抓，只在后面接着补。'
-        + '默认后台跑，返回后可用 hermes_status 看进度。',
+        + '默认后台跑，返回后紧接着调 hermes_wait 等结果。',
       parameters: {
         type: 'object',
         properties: {
@@ -755,7 +917,7 @@ function createTools(opts) {
           attempt: { type: 'integer', description: '读第几次尝试的数据（不给就取编号最大且真有数据的那次）' },
           from_scratch: { type: 'boolean', description: 'true=不管抓到哪一步，每个关键词都从第 1 页重抓（仍会去重）' },
           timeout_min: { type: 'integer', description: '每个关键词最多跑多少分钟' },
-          detach: { type: 'boolean', description: 'true（默认）=后台跑立刻返回；false=前台等它跑完' },
+          detach: { type: 'boolean', description: 'true（默认）=后台跑立刻返回，之后用 hermes_wait 等结果；false=前台一次等满' },
         },
         required: ['task'],
         additionalProperties: false,
