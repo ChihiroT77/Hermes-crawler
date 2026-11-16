@@ -34,6 +34,10 @@ function Step($n, $m) { Write-Host ''; Say "$n  $m" 'Cyan' }
 $verFile = Join-Path $PSScriptRoot 'VERSION'
 $VER = if (Test-Path -LiteralPath $verFile) { (Get-Content -LiteralPath $verFile -Raw).Trim() } else { '未知' }
 
+# 安装包自带的源码（已含全部改造）。有它就不用连 GitHub，也不需要 git。
+$BundleZip = Join-Path $PSScriptRoot 'vendor\mediacrawler-ded4273.zip'
+$HasBundle = Test-Path -LiteralPath $BundleZip
+
 Write-Host ''
 Say '==================================================' 'Cyan'
 Say "  Hermes 爬虫插件 —— 一键安装   版本 $VER" 'Cyan'
@@ -44,12 +48,17 @@ Step '0/9' '先看这台电脑有没有必需的工具'
 
 $gitCmd = Get-Command git -ErrorAction SilentlyContinue
 if (-not $gitCmd) {
-    Bad '没装 git。'
-    Say '  去 https://git-scm.com/download/win 下载安装（一路下一步），装完重开这个窗口。' 'Yellow'
-    if (-not $env:MC_NO_PAUSE) { Read-Host '按回车关闭' }
-    exit 1
+    if ($HasBundle) {
+        Ok '没装 git —— 不影响，安装包自带源码，用不着它'
+    } else {
+        Bad '没装 git。'
+        Say '  去 https://git-scm.com/download/win 下载安装（一路下一步），装完重开这个窗口。' 'Yellow'
+        if (-not $env:MC_NO_PAUSE) { Read-Host '按回车关闭' }
+        exit 1
+    }
+} else {
+    Ok ('git：' + (& git --version))
 }
-Ok ('git：' + (& git --version))
 
 # 找 Python 3.11+（MediaCrawler 要求 >=3.11）
 # 注意：探测用的 Python 代码里不能出现双引号 —— PowerShell 5.1 往 native 程序传参时
@@ -119,11 +128,39 @@ if (Test-Path -LiteralPath $Target) {
     Ok "目录还不存在，稍后自动创建：$Target"
 }
 
-# ---------- 2. 下载 MediaCrawler（只在需要时） ----------
+# ---------- 2. 取 MediaCrawler 源码（只在需要时） ----------
 Step '2/9' '取 MediaCrawler 源码'
+
+$fromBundle = $false
 
 if ($isExisting) {
     Info '已经有源码，跳过下载。'
+} elseif ($HasBundle) {
+    if ($DryRun) {
+        Info "[只检查] 会用自带源码包解压到：$Target"
+        Say ''
+        Say '[只检查] 到此为止 —— 本次没动任何文件。' 'Green'
+        if (-not $env:MC_NO_PAUSE) { Read-Host '按回车关闭' }
+        exit 0
+    }
+    $bundleMb = [math]::Round((Get-Item -LiteralPath $BundleZip).Length / 1MB, 1)
+    Info "用安装包自带的源码（$bundleMb MB）—— 不联网、不用 git"
+    try {
+        Expand-Archive -LiteralPath $BundleZip -DestinationPath $Target -Force -ErrorAction Stop
+    } catch {
+        Bad '自带源码包解压失败，安装包可能没下完整。'
+        Info $_.Exception.Message
+        Say '  重新下载一份完整的安装包再试。' 'Yellow'
+        if (-not $env:MC_NO_PAUSE) { Read-Host '按回车关闭' }
+        exit 1
+    }
+    if (-not (Test-Path -LiteralPath (Join-Path $Target 'main.py'))) {
+        Bad '解压完了但找不到 main.py，安装包不对劲。'
+        if (-not $env:MC_NO_PAUSE) { Read-Host '按回车关闭' }
+        exit 1
+    }
+    $fromBundle = $true
+    Ok '源码已就位（自带包，已含全部改造）'
 } else {
     if ($DryRun) {
         Info "[只检查] 会执行：git clone $RepoUrl `"$Target`""
@@ -151,6 +188,10 @@ if ($isExisting) {
 
 # ---------- 3. 核对版本 / 切基线 ----------
 Step '3/9' '核对源码版本（补丁只认特定版本）'
+
+if ($fromBundle) {
+    Ok '自带源码包：版本固定、改造已内置，这步跳过'
+} else {
 
 $head = (& git -C $Target rev-parse HEAD 2>$null)
 Info "当前版本：$head"
@@ -188,6 +229,8 @@ if ($head -ne $BASELINE) {
     }
 } else {
     Ok '版本正好是基线'
+}
+
 }
 
 # ---------- 4. 建 venv + 装依赖 ----------
@@ -264,6 +307,14 @@ if ($needDeps) {
 # ---------- 5. 试打补丁（只检查） ----------
 Step '5/9' '试打一遍补丁（只检查，一个字都不改）'
 
+$alreadyInstalled = $false
+
+if ($fromBundle) {
+    Ok '自带源码包已含全部改造，不用打补丁（这步跳过）'
+    Step '6/9' '真正打补丁'
+    Ok '跳过（自带包已经改好了）'
+} else {
+
 $patchDir = Join-Path $PSScriptRoot 'patches'
 if (-not (Test-Path -LiteralPath $patchDir)) { $patchDir = $PSScriptRoot }
 $patches = @(Get-ChildItem -LiteralPath $patchDir -Filter '*.patch' -File | Sort-Object Name)
@@ -282,7 +333,6 @@ foreach ($p in $patches) {
 }
 Info "能打上：$($pass.Count) 条    打不上：$($fail.Count) 条"
 
-$alreadyInstalled = $false
 if ($fail.Count -eq 0) {
     Ok '全部能打上，是全新安装'
 } elseif ($pass.Count -eq 0) {
@@ -333,6 +383,8 @@ if ($alreadyInstalled) {
         $n++
     }
     Ok "打完 $n 条"
+}
+
 }
 
 # ---------- 7. 复制封装层 ----------

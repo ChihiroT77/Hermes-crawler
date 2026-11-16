@@ -36,6 +36,9 @@ powershell -NoProfile -ExecutionPolicy Bypass -File install.ps1
 
 装完会提示下一步。默认装在 `%USERPROFILE%\MediaCrawler`。
 
+> **离线也能装**：仓库里的 `vendor/mediacrawler-ded4273.zip` 是打好补丁的 MediaCrawler 源码。
+> 安装脚本优先用它，**不连 GitHub、也不需要装 git**。只有这个文件缺失时才回退到在线 `git clone`。
+
 ### 方式 B：让 AI 来装（你说的"解放双手"）
 
 把这句丢给你的 AI：
@@ -51,12 +54,12 @@ powershell -NoProfile -ExecutionPolicy Bypass -File install.ps1
 | 项目 | 要求 | 说明 |
 |---|---|---|
 | 系统 | Windows 10/11 | 进程检测用了 PowerShell，Mac/Linux 没适配 |
-| Git | 任意版本 | 用来下载 MediaCrawler |
+| Git | 可选 | 安装包自带源码，不装也能装。只有源码包缺失、需要在线下载时才用得上 |
 | Python | **3.11 以上**（推荐 3.12） | 安装时勾 "Add python.exe to PATH" |
 | 浏览器 | Edge 或 Chrome | Windows 自带 Edge 就行 |
 | 磁盘 | 约 1.5 GB | 源码 + Python 环境 + 浏览器内核 |
 
-**不需要**你自己去下 MediaCrawler —— 脚本会装。
+**不需要**你自己去下 MediaCrawler —— 源码已经打包在安装包里。
 
 ---
 
@@ -166,7 +169,8 @@ MediaCrawler 采用 [NON-COMMERCIAL LEARNING LICENSE 1.1](https://github.com/Nan
 
 **因此：**
 
-1. 本仓库**不包含 MediaCrawler 源码**，只包含补丁和封装层。安装时由脚本从官方仓库下载。
+1. 本仓库**附带**一份打好补丁的 MediaCrawler 源码（`vendor/mediacrawler-ded4273.zip`），目的是让人离线安装。
+   该源码版权归原作者所有，许可全文见 `vendor/mediacrawler-LICENSE.txt`。
 2. 本仓库的所有内容同样**仅供学习研究，禁止商用**。
 3. 使用本项目产生的任何法律后果由使用者自行承担。请遵守目标平台的 `robots.txt` 和服务条款。
 
@@ -181,6 +185,9 @@ Hermes/
 ├── install.ps1              一键安装脚本（支持从零装）
 ├── install_for_ai.md        给 AI agent 读的安装指引
 ├── 一键安装.bat             双击就能跑（Windows）
+├── vendor/
+│   ├── mediacrawler-ded4273.zip     打好补丁的 MediaCrawler 源码（离线安装用）
+│   └── mediacrawler-LICENSE.txt     原作者许可证全文
 ├── patches/                 27 个补丁（改 MediaCrawler 的地方）
 ├── newfiles/                新增文件（封装层，原项目里没有的）
 │   ├── agent_crawler/       核心：命令行、MCP 服务、文档

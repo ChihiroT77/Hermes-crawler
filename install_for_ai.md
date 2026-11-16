@@ -21,9 +21,11 @@ python -c "import sys;print(sys.version)"
 
 **判定：**
 
-- `git` 没有 → 停下，告诉用户："请先装 Git（https://git-scm.com/download/win），装完重开终端，再让我继续。"不要自己下载安装包去装。
+- `git` 没有 → **先看安装包里有没有 `vendor\mediacrawler-ded4273.zip`**。
+  - 有 → 不需要 git，继续第 1 步（脚本会自己走离线解压这条路）。
+  - 没有 → 停下，告诉用户："请先装 Git（https://git-scm.com/download/win），装完重开终端，再让我继续。"不要自己下载安装包去装。
 - Python 低于 3.11 或没有 → 停下，告诉用户："请先装 Python 3.12（https://www.python.org/downloads/windows/），安装时勾上 Add python.exe to PATH。"
-- 两项都有且版本够 → 继续第 1 步。
+- 两项都满足（或 Python 够、且有 vendor 源码包）→ 继续第 1 步。
 
 ---
 
@@ -58,14 +60,15 @@ $env:MC_NO_PAUSE = '1'
 
 **这一步会做什么**（你要能跟用户解释清楚）：
 
-1. 检查 git / python
-2. `git clone` 官方 MediaCrawler（国内网络慢的话，加 `-RepoUrl https://ghfast.top/https://github.com/NanmiCoder/MediaCrawler.git`）
-3. 切到补丁对应的基线版本
-4. 建 `.venv`、装依赖（**3~8 分钟，没输出是正常的**）
-5. 打 27 个补丁
-6. 复制封装层（`agent_crawler\` 等）
-7. 确认浏览器
-8. 自检
+1. 检查 git / python（有自带源码包时，git 缺失不算错）
+2. **优先**解压 `vendor\mediacrawler-ded4273.zip`（离线，不联网）
+3. 只有源码包缺失时，才 `git clone` 官方 MediaCrawler（国内网络慢的话，加 `-RepoUrl https://ghfast.top/https://github.com/NanmiCoder/MediaCrawler.git`）
+4. 在线路径下：切到补丁对应的基线版本
+5. 建 `.venv`、装依赖（**3~8 分钟，没输出是正常的**）
+6. 在线路径下：打 27 个补丁（离线包已内置改造，跳过）
+7. 复制封装层（`agent_crawler\` 等）
+8. 确认浏览器
+9. 自检
 
 **怎么判断成功**：脚本最后打印
 

@@ -4,9 +4,14 @@
 
 `Hermes` 是 [MediaCrawler](https://github.com/NanmiCoder/MediaCrawler) 的**封装层 + 补丁集合**。
 
-它**不包含** MediaCrawler 的源代码。仓库里的 `patches/` 目录存放的是「对 MediaCrawler 源代码的修改描述」（`.patch` 文件），`newfiles/` 目录存放的是原项目中不存在的少量新增文件（命令行封装、MCP 服务、文档）。
+仓库另外**附带一份已经打好补丁的 MediaCrawler 源码**（`vendor/mediacrawler-ded4273.zip`），目的是让使用者不必连接 GitHub、也不必安装 git 就能完成安装。
 
-安装时，`install.ps1` 会从官方仓库下载 MediaCrawler，再把上述补丁应用上去。
+安装时，`install.ps1` 按下面的顺序取源码：
+
+1. 优先解压 `vendor/mediacrawler-ded4273.zip`（离线、不需要 git）；
+2. 只有该文件缺失时，才回退到从官方仓库 `git clone`，再依次应用 `patches/` 里的补丁。
+
+`patches/` 中的 `.patch` 文件、`newfiles/` 中的新增文件（命令行封装、MCP 服务、文档）均为本项目产物。
 
 ---
 
@@ -41,8 +46,9 @@ Copyright (c) [2024] [relakkes@gmail.com]
 2. 补丁是对他人源代码的修改描述，属于衍生作品，须遵守 MediaCrawler 的许可证。
 3. 分发本项目时，**必须**同时保留：
    - 本文件（`LICENSE-NOTICE.md`）
-   - MediaCrawler 的原始许可证全文（安装后位于 `<安装目录>\LICENSE`）
+   - MediaCrawler 的原始许可证全文（`vendor/mediacrawler-LICENSE.txt`；安装后另有一份位于 `<安装目录>\LICENSE`）
    - 上述版权声明
+4. `vendor/mediacrawler-ded4273.zip` 是 MediaCrawler 源码的副本，**不得单独抽出用于商业用途**，也不得删除包内的 `LICENSE` 文件。
 
 ---
 
