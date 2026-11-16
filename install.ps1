@@ -499,6 +499,10 @@ Say ''
 Say '  3) 接 AI 客户端（MCP）'
 Say '     让 AI 读 install_for_ai.md，它会自己把配置写好。'
 Say ''
+Say '可选：不想每次都扫码？装个浏览器小插件（不装也能用）' 'Cyan'
+Say "     双击这个文件：$Target\agent_crawler\安装免扫码插件.bat"
+Say '     装一次，以后各平台都免扫码。不装的话，每个平台第一次要手机扫一次码。'
+Say ''
 Say "完整手册：$Target\agent_crawler\使用说明.md"
 Say ''
 
