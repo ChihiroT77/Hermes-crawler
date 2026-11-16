@@ -1,4 +1,4 @@
-# Hermes —— 让 AI 帮你抓社交平台数据
+# Hermes-crawler —— 让 AI 帮你抓社交平台数据
 
 **一句话：装好之后，你只要对 AI 说「帮我抓 B 站 10 条人工智能视频的评论」，它自己就去干了。**
 
@@ -12,9 +12,9 @@
 
 MediaCrawler 本身很能打，但它是**给程序员用的**：要配环境、要背十几个参数、要自己盯进度、失败了还看不出原因。
 
-Hermes 在它外面加了一层壳：
+Hermes-crawler 在它外面加了一层壳：
 
-| 原来的麻烦 | Hermes 的做法 |
+| 原来的麻烦 | Hermes-crawler 的做法 |
 |---|---|
 | 参数十几个，记不住 | 十个工具，每个都有中文说明，AI 自己会挑 |
 | 跑起来没反馈，不知道死了没 | 让 AI 一次等到跑完，直接拿结果 |
@@ -29,7 +29,7 @@ Hermes 在它外面加了一层壳：
 
 ### 最省事：双击安装（推荐给不懂命令行的人）
 
-1. 打开 <https://github.com/ChihiroT77/Hermes>
+1. 打开 <https://github.com/ChihiroT77/Hermes-crawler>
 2. 点右上角绿色的 **Code** 按钮 → **Download ZIP**
 3. 下载完**右键解压**（千万别直接在压缩包里双击，会装不上）
 4. 进解压出来的文件夹，**双击 `一键安装.bat`**
@@ -43,8 +43,8 @@ Hermes 在它外面加了一层壳：
 ### 方式 A：用命令行装（懂一点技术的用这个）
 
 ```powershell
-git clone https://github.com/ChihiroT77/Hermes.git Hermes
-cd Hermes
+git clone https://github.com/ChihiroT77/Hermes-crawler.git Hermes-crawler
+cd Hermes-crawler
 powershell -NoProfile -ExecutionPolicy Bypass -File install.ps1
 ```
 
@@ -54,7 +54,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File install.ps1
 
 把仓库里的 `install_for_ai.md` 连同整个文件夹交给你的 AI，然后说：
 
-> 请读一下这个目录里的 `install_for_ai.md`，然后按里面写的把 Hermes 装好并接通。
+> 请读一下这个目录里的 `install_for_ai.md`，然后按里面写的把 Hermes-crawler 装好并接通。
 
 **AI 读的是那份几百字的指引，不是整个项目**。它知道先干什么、怎么判断成功、失败了怎么办。
 
@@ -107,7 +107,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File install.ps1
 
 ### 用法二：接上 AI，让它干活（推荐）
 
-这一步就是把 Hermes「介绍」给你的 AI 客户端。**不同软件位置不一样，下面逐个说。**
+这一步就是把 Hermes-crawler「介绍」给你的 AI 客户端。**不同软件位置不一样，下面逐个说。**
 
 #### 先拿到两个路径
 
@@ -301,7 +301,7 @@ MediaCrawler 采用 [NON-COMMERCIAL LEARNING LICENSE 1.1](https://github.com/Nan
 ## 目录结构
 
 ```
-Hermes/
+Hermes-crawler/
 ├── install.ps1              一键安装脚本（支持从零装）
 ├── install_for_ai.md        给 AI agent 读的安装指引
 ├── 一键安装.bat             双击就能跑（Windows）

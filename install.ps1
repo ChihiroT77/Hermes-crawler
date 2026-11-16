@@ -1,4 +1,4 @@
-﻿# Hermes 一键安装（含从零装 MediaCrawler）
+﻿# Hermes-crawler 一键安装（含从零装 MediaCrawler）
 #
 # 用法（三种都行）：
 #   1) 双击同目录「一键安装.bat」
@@ -40,7 +40,7 @@ $HasBundle = Test-Path -LiteralPath $BundleZip
 
 Write-Host ''
 Say '==================================================' 'Cyan'
-Say "  Hermes 爬虫插件 —— 一键安装   版本 $VER" 'Cyan'
+Say "  Hermes-crawler 爬虫插件 —— 一键安装   版本 $VER" 'Cyan'
 Say '==================================================' 'Cyan'
 
 # ---------- 0. 前置检查：git / python ----------
@@ -339,10 +339,10 @@ if ($fail.Count -eq 0) {
     $agentPy = Join-Path $Target 'agent_crawler\agent_crawl.py'
     if (Test-Path -LiteralPath $agentPy) {
         $alreadyInstalled = $true
-        Ok '补丁一条都打不上，但项目里已有 Hermes —— 判断为「以前装过」'
+        Ok '补丁一条都打不上，但项目里已有 Hermes-crawler —— 判断为「以前装过」'
         Info '跳过打补丁，只把封装层覆盖成最新版。'
     } else {
-        Bad '一条都打不上，项目里也没有 Hermes。多半是源码版本差太远。'
+        Bad '一条都打不上，项目里也没有 Hermes-crawler。多半是源码版本差太远。'
         Say "  删掉 $Target 重新装一次最省事。" 'Yellow'
         if (-not $env:MC_NO_PAUSE) { Read-Host '按回车关闭' }
         exit 1
@@ -388,7 +388,7 @@ if ($alreadyInstalled) {
 }
 
 # ---------- 7. 复制封装层 ----------
-Step '7/9' '复制 Hermes 封装层（命令行、MCP、说明文档、免扫码扩展）'
+Step '7/9' '复制 Hermes-crawler 封装层（命令行、MCP、说明文档、免扫码扩展）'
 
 $nf = Join-Path $PSScriptRoot 'newfiles'
 if (-not (Test-Path -LiteralPath $nf)) {
@@ -483,7 +483,7 @@ if (-not (Test-Path -LiteralPath $venvPy)) {
 # ---------- 收尾 ----------
 Write-Host ''
 Say '==================================================' 'Cyan'
-Say "  装完了 —— Hermes $VER" 'Green'
+Say "  装完了 —— Hermes-crawler $VER" 'Green'
 Say "  位置：$Target" 'Green'
 Say '==================================================' 'Cyan'
 Say ''

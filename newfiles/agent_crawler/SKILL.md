@@ -1,9 +1,9 @@
 ﻿---
 name: Hermes
-description: "Hermes：用本机 MediaCrawler 采集社交平台数据——B站/小红书/抖音/快手/微博/贴吧/知乎的关键词搜索、指定内容、作者主页，可选一级评论与媒体文件，自带预检、超时保护、结果对账与 Excel 导出。用户要爬取、采集、抓取这些平台的帖子、视频、评论、博主数据，或要把采到的数据导成 Excel 时使用。"
+description: "Hermes-crawler：用本机 MediaCrawler 采集社交平台数据——B站/小红书/抖音/快手/微博/贴吧/知乎的关键词搜索、指定内容、作者主页，可选一级评论与媒体文件，自带预检、超时保护、结果对账与 Excel 导出。用户要爬取、采集、抓取这些平台的帖子、视频、评论、博主数据，或要把采到的数据导成 Excel 时使用。"
 ---
 
-# Hermes 数据采集（MediaCrawler 封装层）
+# Hermes-crawler 数据采集（MediaCrawler 封装层）
 
 本机 `%MC_ROOT%` 已部署 MediaCrawler，并配有面向 AI 的封装脚本。
 **一律通过封装脚本调用；绝不直接跑 MediaCrawler，绝不改它的源码和配置**（只允许改 `agent_crawler\` 下的封装文件）。

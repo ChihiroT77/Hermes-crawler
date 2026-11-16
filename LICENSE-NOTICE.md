@@ -2,7 +2,7 @@
 
 ## 一、本项目是什么
 
-`Hermes` 是 [MediaCrawler](https://github.com/NanmiCoder/MediaCrawler) 的**封装层 + 补丁集合**。
+`Hermes-crawler` 是 [MediaCrawler](https://github.com/NanmiCoder/MediaCrawler) 的**封装层 + 补丁集合**。
 
 仓库另外**附带一份已经打好补丁的 MediaCrawler 源码**（`vendor/mediacrawler-ded4273.zip`），目的是让使用者不必连接 GitHub、也不必安装 git 就能完成安装。
 

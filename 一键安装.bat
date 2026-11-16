@@ -2,7 +2,7 @@
 setlocal
 
 echo.
-echo   Hermes 爬虫插件 - 一键安装
+echo   Hermes-crawler 爬虫插件 - 一键安装
 echo   ==========================
 echo.
 

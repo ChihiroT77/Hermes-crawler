@@ -1,7 +1,7 @@
-# 给 AI 看的安装指引（Hermes 爬虫插件）
+# 给 AI 看的安装指引（Hermes-crawler 爬虫插件）
 
 > 这份文件是给 **AI agent** 读的。人类用户可以只看 `README.md`。
-> 你要做的事：把 Hermes 装到这台 Windows 电脑上，并接到 AI 客户端里。
+> 你要做的事：把 Hermes-crawler 装到这台 Windows 电脑上，并接到 AI 客户端里。
 > **每一步都要看到实际输出确认成功，不要假设成功。**
 
 ---
@@ -73,7 +73,7 @@ $env:MC_NO_PAUSE = '1'
 **怎么判断成功**：脚本最后打印
 
 ```
-  装完了 —— Hermes <版本号>
+  装完了 —— Hermes-crawler <版本号>
 ```
 
 并且第 9 步自检里出现版本号和 `status` 的输出。**看到这两样才算成功。**
