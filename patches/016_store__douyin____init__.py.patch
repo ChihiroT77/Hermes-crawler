@@ -1,0 +1,70 @@
+﻿diff --git a/store/douyin/__init__.py b/store/douyin/__init__.py
+index 1d5e2b9..5e733ca 100644
+--- a/store/douyin/__init__.py
++++ b/store/douyin/__init__.py
+@@ -21,7 +21,7 @@
+ # @Author  : relakkes@gmail.com
+ # @Time    : 2024/1/14 18:46
+ # @Desc    :
+-from typing import List
++from typing import Dict, List
+ 
+ import config
+ from media_platform.douyin.media import extract_cover_url, extract_image_urls, extract_video_urls
+@@ -31,6 +31,24 @@ from tools.user_hash import anonymize_user_id, mask_nickname
+ from ._store_impl import *
+ 
+ 
++def _dy_verify_type(user_info: Dict) -> int:
++    """抖音不给认证数字码，只有文案，这里归一化成：0 无认证 / 1 个人认证 / 2 企业·机构认证 / -1 拿不到用户对象。"""
++    if not user_info:
++        return -1
++    if user_info.get("enterprise_verify_reason"):
++        return 2
++    if user_info.get("custom_verify"):
++        return 1
++    return 0
++
++
++def _dy_verify_desc(user_info: Dict):
++    """认证原文（平台给的那句说明），没有就空着。"""
++    if not user_info:
++        return None
++    return user_info.get("enterprise_verify_reason") or user_info.get("custom_verify") or None
++
++
+ class DouyinStoreFactory:
+     STORES = {
+         "csv": DouyinCsvStoreImplement,
+@@ -134,6 +152,16 @@ async def update_dy_aweme_comment(aweme_id: str, comment_item: Dict):
+     user_info = comment_item.get("user", {})
+     comment_id = comment_item.get("cid")
+     parent_comment_id = comment_item.get("reply_id", "0")
++    # 2026-11-12 探针：MC_DUMP_RAW=1 时把一条原始评论整条落盘，用来确认平台到底给了哪些账号属性
++    import os as _os, json as _json
++    if _os.environ.get("MC_DUMP_RAW"):
++        # 2026-11-15 改成跟随项目根目录，不再写死本机路径
++        _dump_dir = _os.path.join(
++            _os.path.dirname(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))),
++            "tmp_dump")
++        _os.makedirs(_dump_dir, exist_ok=True)
++        with open(_os.path.join(_dump_dir, "dy_raw_comment.json"), "w", encoding="utf-8") as _f:
++            _json.dump(comment_item, _f, ensure_ascii=False, indent=1)
+     save_comment_item = {
+         "comment_id": comment_id,
+         "create_time": comment_item.get("create_time"),
+@@ -146,6 +174,14 @@ async def update_dy_aweme_comment(aweme_id: str, comment_item: Dict):
+         "last_modify_ts": utils.get_current_timestamp(),
+         "parent_comment_id": parent_comment_id,
+         "pictures": ",".join(_extract_comment_image_list(comment_item)),
++        # 账号属性（2026-11-12 新增）：
++        "comment_source": comment_item.get("ip_label"),  # 平台给的 IP 原文（抖音就一个省份名）
++        "ip_location": comment_item.get("ip_label"),  # IP 属地
++        "verification_type": _dy_verify_type(user_info),  # 认证类型（抖音归一化码，见函数注释）
++        "verification_desc": _dy_verify_desc(user_info),  # 认证文案原文
++        "fans_count": None,  # 抖音评论接口不返回粉丝数
++        "follow_count": None,  # 抖音评论接口不返回关注数
++        "register_time": None,  # 抖音不公开注册时间
+     }
+     utils.logger.info(f"[store.douyin.update_dy_aweme_comment] douyin aweme comment: {comment_id}, content: {save_comment_item.get('content')}")
+ 

@@ -1,0 +1,87 @@
+﻿diff --git a/webui/src/store/crawlerStore.ts b/webui/src/store/crawlerStore.ts
+index 48994af..4e774a8 100644
+--- a/webui/src/store/crawlerStore.ts
++++ b/webui/src/store/crawlerStore.ts
+@@ -1,4 +1,5 @@
+ import { create } from 'zustand'
++import { MAX_CRAWL_COUNT } from '@/types/crawler'
+ import type { LogEntry, CrawlerConfig } from '@/types/crawler'
+ 
+ interface CrawlerState {
+@@ -46,6 +47,20 @@ function saveClearedLogIdToStorage(id: number | null): void {
+   }
+ }
+ 
++function todayIso(): string {
++  const now = new Date()
++  const pad = (n: number) => String(n).padStart(2, '0')
++  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`
++}
++
++/** N 天前的日期（YYYY-MM-DD），用于时间区间模式的默认值 */
++function daysAgoIso(days: number): string {
++  const d = new Date()
++  d.setDate(d.getDate() - days)
++  const pad = (n: number) => String(n).padStart(2, '0')
++  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
++}
++
+ const defaultConfig: CrawlerConfig = {
+   platform: 'bili',
+   login_type: 'qrcode',
+@@ -57,9 +72,55 @@ const defaultConfig: CrawlerConfig = {
+   enable_comments: true,
+   enable_sub_comments: false,
+   enable_media: false,
++  enable_wordcloud: false,
++  enable_excel_export: false,
+   save_option: 'json',
+   cookies: '',
+   headless: false,
++
++  // 抓取规模：默认拉到上限 = 抓到平台没有更多为止
++  max_notes_count: MAX_CRAWL_COUNT,
++  max_comments_count: MAX_CRAWL_COUNT,
++
++  // 速度与稳定性
++  max_concurrency: 1,
++  sleep_sec: 2,
++  download_live_photo: true,
++
++  // 存储
++  save_data_path: '',
++  db_host: 'localhost',
++  db_port: 3306,
++  db_user: 'root',
++  db_password: '123456',
++  db_name: 'media_crawler',
++
++  // IP 代理
++  enable_ip_proxy: false,
++  ip_proxy_pool_count: 2,
++  ip_proxy_provider_name: 'kuaidaili',
++  static_proxy_url: '',
++  kdl_secret_id: '',
++  kdl_signature: '',
++  kdl_user_name: '',
++  kdl_user_pwd: '',
++  wandou_app_key: '',
++
++  // 平台专属
++  xhs_sort: 'popularity_descending',
++  dy_publish_time: 0,
++  bili_search_mode: 'normal',
++  bili_start_day: daysAgoIso(7),
++  bili_end_day: todayIso(),
++  bili_qn: 80,
++  // 两种「时间区间」模式都按这个数每天封顶；默认给 20，1 的话一个月的区间只会抓到 30 条左右
++  bili_max_notes_per_day: 20,
++  weibo_full_text: true,
++
++  // 词云调优
++  custom_words: '零几:年份, 高频词:专业术语',
++  stop_words_file: './docs/hit_stopwords.txt',
++  font_path: './docs/STZHONGS.TTF',
+ }
+ 
+ export const useCrawlerStore = create<CrawlerState>((set, get) => ({

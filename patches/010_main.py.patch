@@ -1,0 +1,34 @@
+﻿diff --git a/main.py b/main.py
+index 2823a5f..60b6fb4 100644
+--- a/main.py
++++ b/main.py
+@@ -83,6 +83,19 @@ def _flush_excel_if_needed() -> None:
+         print(f"[Main] Error flushing Excel data: {e}")
+ 
+ 
++async def _export_excel_if_needed() -> None:
++    """额外导出一份 Excel（主格式保持 json/jsonl，词云照常生成）。"""
++    if not getattr(config, "ENABLE_EXCEL_EXPORT", False):
++        return
++
++    try:
++        from tools.excel_export import export_excel_from_saved_files
++
++        await export_excel_from_saved_files()
++    except Exception as e:
++        print(f"[Main] Error exporting Excel: {e}")
++
++
+ async def _generate_wordcloud_if_needed() -> None:
+     if config.SAVE_DATA_OPTION not in ("json", "jsonl") or not config.ENABLE_GET_WORDCLOUD:
+         return
+@@ -115,6 +128,9 @@ async def main() -> None:
+ 
+     _flush_excel_if_needed()
+ 
++    # 额外导出 Excel：词云需要 json/jsonl，这样表格与词云可以兼得
++    await _export_excel_if_needed()
++
+     # Generate wordcloud after crawling is complete
+     # Only for JSON save mode
+     await _generate_wordcloud_if_needed()

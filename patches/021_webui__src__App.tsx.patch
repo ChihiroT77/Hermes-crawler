@@ -1,0 +1,38 @@
+﻿diff --git a/webui/src/App.tsx b/webui/src/App.tsx
+index 27dd38a..f28740c 100644
+--- a/webui/src/App.tsx
++++ b/webui/src/App.tsx
+@@ -2,7 +2,6 @@ import { useState } from 'react'
+ import { Toaster } from 'sonner'
+ import { Sidebar } from '@/components/layout/Sidebar'
+ import { MainContent } from '@/components/layout/MainContent'
+-import { AuthorFooter } from '@/components/layout/AuthorFooter'
+ import { CrawlerConfigPanel } from '@/components/config/CrawlerConfigPanel'
+ import { EnvironmentCheck, isEnvChecked } from '@/components/env/EnvironmentCheck'
+ import { LicenseDisclaimer, isLicenseAccepted } from '@/components/license/LicenseDisclaimer'
+@@ -43,20 +42,19 @@ function App() {
+       {/* Header Bar */}
+       <Sidebar onShowDisclaimer={handleShowDisclaimer} />
+ 
+-      {/* Main Area */}
+-      <div className="flex-1 flex flex-col gap-4 p-4 overflow-hidden min-h-0">
++      {/* Main Area - 整个中栏可以上下滚动，内容再多也不会被裁掉 */}
++      <div className="flex-1 flex flex-col gap-4 p-4 overflow-y-auto min-h-0">
+         {/* Config Panel - Primary Action Area (Always Expanded) */}
+         <div className="flex-shrink-0">
+           <CrawlerConfigPanel />
+         </div>
+ 
+         {/* Console - Collapsible Terminal */}
+-        <MainContent />
++        <div className="flex-1 min-h-[300px] flex flex-col">
++          <MainContent />
++        </div>
+       </div>
+ 
+-      {/* Author Footer */}
+-      <AuthorFooter />
+-
+       {/* Toast notifications - Theme-aware style */}
+       <Toaster
+         position="top-right"

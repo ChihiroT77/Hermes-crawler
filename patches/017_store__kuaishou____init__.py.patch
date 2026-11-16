@@ -1,0 +1,21 @@
+﻿diff --git a/store/kuaishou/__init__.py b/store/kuaishou/__init__.py
+index c8034de..5a24450 100644
+--- a/store/kuaishou/__init__.py
++++ b/store/kuaishou/__init__.py
+@@ -92,6 +92,16 @@ async def update_ks_video_comment(video_id: str, comment_item: Dict):
+     # Old GraphQL API used camelCase field names
+     # Support both formats for backward compatibility
+     comment_id = comment_item.get("comment_id") or comment_item.get("commentId")
++    # 2026-11-12 探针：MC_DUMP_RAW=1 时把一条原始评论整条落盘，用来确认平台到底给了哪些账号属性
++    import os as _os, json as _json
++    if _os.environ.get("MC_DUMP_RAW"):
++        # 2026-11-15 改成跟随项目根目录，不再写死本机路径
++        _dump_dir = _os.path.join(
++            _os.path.dirname(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))),
++            "tmp_dump")
++        _os.makedirs(_dump_dir, exist_ok=True)
++        with open(_os.path.join(_dump_dir, "ks_raw_comment.json"), "w", encoding="utf-8") as _f:
++            _json.dump(comment_item, _f, ensure_ascii=False, indent=1)
+     save_comment_item = {
+         "comment_id": str(comment_id) if comment_id else None,  # Convert to string for storage
+         "create_time": comment_item.get("timestamp"),

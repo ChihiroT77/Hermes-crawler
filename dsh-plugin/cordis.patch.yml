@@ -1,0 +1,19 @@
+# dsh-hermes 插件（DSH Bundle patch）
+#
+# 作为 bundle 被合入 profile 时自动插入本插件行。
+# `id` / `name` 都不是自由文本，各有出处：
+#   id   = 模块导出的 `name`（index.js 里的 `export const name`）
+#   name = 包名（package.json 的 `name`）
+# 宿主要求两者都能对上，缺一项这一行会被静默跳过（表现为"插件装上了但没生效"）。
+#
+# 配置面故意留空：patch 里的 `config` 是整体替换而非与默认值深合并，
+# 在这里写死一份等于替所有使用者钉死配置。默认值由 index.js 自带
+# （crawlerRoot 为空时取 用户目录/MediaCrawler）。
+#
+# 可用键：
+#   crawlerRoot: ''   # MediaCrawler 装在哪；留空 = 用户目录下的 MediaCrawler
+#   pythonPath:  ''   # 指定解释器；留空 = <crawlerRoot>/.venv 里的 python
+- insert:
+    - id: dsh-hermes
+      name: 'dsh-hermes'
+      config: {}

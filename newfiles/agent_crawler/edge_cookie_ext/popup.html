@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { width: 300px; margin: 0; padding: 12px; font: 13px/1.6 "Microsoft YaHei", sans-serif; color: #222; }
+    h1 { font-size: 14px; margin: 0 0 8px; }
+    p.tip { margin: 0 0 10px; color: #666; font-size: 12px; }
+    button { width: 100%; padding: 7px 10px; margin-bottom: 6px; border: 1px solid #ccc;
+             border-radius: 6px; background: #fff; cursor: pointer; text-align: left; font-size: 13px; }
+    button:hover { background: #f2f7ff; border-color: #7aa7ff; }
+    button.all { background: #1a73e8; border-color: #1a73e8; color: #fff; font-weight: 600; }
+    button.all:hover { background: #1666cc; }
+    #log { margin-top: 8px; padding: 8px; border-radius: 6px; background: #f6f6f6;
+           font-size: 12px; color: #444; white-space: pre-wrap; max-height: 200px; overflow: auto; }
+    #auto { margin: 0 0 10px; padding: 8px 10px; border-radius: 6px; background: #eef6ee;
+            border: 1px solid #cfe6cf; font-size: 12px; color: #2c5c2c; line-height: 1.6; }
+    #auto.warn { background: #fff6e5; border-color: #f0dcae; color: #7a5a12; }
+  </style>
+</head>
+<body>
+  <h1>导出登录票</h1>
+  <p class="tip">先在这台 Edge 里登录好要采的平台。登录后插件会自动导，也可以点下面按钮手动导。文件在"下载"文件夹。</p>
+  <div id="auto"></div>
+  <div id="buttons"></div>
+  <div id="log">还没导出。</div>
+  <script src="popup.js"></script>
+</body>
+</html>

@@ -1,0 +1,13 @@
+﻿diff --git a/media_platform/tieba/help.py b/media_platform/tieba/help.py
+index 42b36e1..edc6b67 100644
+--- a/media_platform/tieba/help.py
++++ b/media_platform/tieba/help.py
+@@ -613,6 +613,8 @@ class TieBaExtractor:
+                 tieba_link=tieba_link,
+                 publish_time=publish_time,
+                 note_id=note_id,
++                ip_location=ip_location or None,
++                comment_source=(f"IP属地:{ip_location}" if ip_location else None),
+             )
+             result.append(tieba_comment)
+         return result

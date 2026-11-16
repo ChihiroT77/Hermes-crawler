@@ -1,0 +1,86 @@
+﻿diff --git a/media_platform/bilibili/client.py b/media_platform/bilibili/client.py
+index 0e50661..860e1a6 100644
+--- a/media_platform/bilibili/client.py
++++ b/media_platform/bilibili/client.py
+@@ -57,6 +57,20 @@ def _extract_pinned_comments(value: Any) -> List[Dict]:
+ 
+ class BilibiliClient(AbstractApiClient, ProxyRefreshMixin):
+ 
++    # ===== 抓取提速：全局请求闸门（2026-11-09 新增）=====
++    # 同一个 client 实例上所有评论请求共用一把信号量，用来限制「同时在飞」的请求数。
++    # 好处是视频并发 + 评论楼并发叠加时总量依然可控，不会因为相乘把 B 站打爆。
++    _comment_sem: Optional[asyncio.Semaphore] = None
++
++    def _comment_slot(self) -> asyncio.Semaphore:
++        """返回全局评论请求闸门。并发数取 config.BILI_COMMENT_CONCURRENCY，1 即退回旧的串行行为。"""
++        sem = self._comment_sem
++        if sem is None:
++            limit = int(getattr(config, "BILI_COMMENT_CONCURRENCY", 1) or 1)
++            sem = asyncio.Semaphore(max(1, limit))
++            self._comment_sem = sem
++        return sem
++
+     def __init__(
+         self,
+         timeout=60,  # For media crawling, Bilibili long videos need a longer timeout
+@@ -290,7 +304,8 @@ class BilibiliClient(AbstractApiClient, ProxyRefreshMixin):
+             comments_res = None
+             for attempt in range(max_retries):
+                 try:
+-                    comments_res = await self.get_video_comments(video_id, CommentOrderType.DEFAULT, next_page)
++                    async with self._comment_slot():
++                        comments_res = await self.get_video_comments(video_id, CommentOrderType.DEFAULT, next_page)
+                     break  # Success
+                 except DataFetchError as e:
+                     if attempt < max_retries - 1:
+@@ -346,16 +361,33 @@ class BilibiliClient(AbstractApiClient, ProxyRefreshMixin):
+             if len(result) + len(comment_list) > max_count:
+                 comment_list = comment_list[:max_count - len(result)]
+             if is_fetch_sub_comments:
++                # 提速改造（2026-11-09）：老代码这里是 for 循环，逐个评论楼串行发请求，
++                # 一次抓取几千个楼就是几千次「请求 + sleep」，是整轮抓取最慢的一段。
++                # 现在改成并发提交，真正的并发度由 _comment_slot() 全局统一卡住，
++                # 所以即使视频之间也并发，同时在飞的请求数也不会超过 BILI_COMMENT_CONCURRENCY。
++                sub_tasks = []
+                 for comment in comment_list:
+                     comment_id = comment['rpid']
+                     if (comment.get("rcount", 0) > 0):
+-                        await self.get_video_all_level_two_comments(
+-                            video_id,
+-                            comment_id,
+-                            CommentOrderType.DEFAULT,
+-                            10,
+-                            crawl_interval,
+-                            callback,
++                        sub_tasks.append(
++                            asyncio.create_task(
++                                self.get_video_all_level_two_comments(
++                                    video_id,
++                                    comment_id,
++                                    CommentOrderType.DEFAULT,
++                                    10,
++                                    crawl_interval,
++                                    callback,
++                                )
++                            )
++                        )
++                if sub_tasks:
++                    sub_results = await asyncio.gather(*sub_tasks, return_exceptions=True)
++                    sub_failed = [r for r in sub_results if isinstance(r, BaseException)]
++                    if sub_failed:
++                        utils.logger.warning(
++                            f"[BilibiliClient.get_video_all_comments] video {video_id}: "
++                            f"{len(sub_failed)}/{len(sub_tasks)} 个评论楼的子评论抓取失败，已跳过。首个错误：{sub_failed[0]!r}"
+                         )
+             if callback:  # If there is a callback function, execute it
+                 await callback(video_id, comment_list)
+@@ -387,7 +419,8 @@ class BilibiliClient(AbstractApiClient, ProxyRefreshMixin):
+ 
+         pn = 1
+         while True:
+-            result = await self.get_video_level_two_comments(video_id, level_one_comment_id, pn, ps, order_mode)
++            async with self._comment_slot():
++                result = await self.get_video_level_two_comments(video_id, level_one_comment_id, pn, ps, order_mode)
+             comment_list: List[Dict] = result.get("replies", [])
+             if callback:  # If there is a callback function, execute it
+                 await callback(video_id, comment_list)

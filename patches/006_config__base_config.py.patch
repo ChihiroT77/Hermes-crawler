@@ -1,0 +1,112 @@
+﻿diff --git a/config/base_config.py b/config/base_config.py
+index 20aaa6e..778bdd2 100644
+--- a/config/base_config.py
++++ b/config/base_config.py
+@@ -18,13 +18,13 @@
+ # 使用本代码即表示您同意遵守上述原则和LICENSE中的所有条款。
+ 
+ # Basic configuration
+-PLATFORM = "xhs"  # Platform, xhs | dy | ks | bili | wb | tieba | zhihu
++PLATFORM = "bili"  # Platform, xhs | dy | ks | bili | wb | tieba | zhihu
+ 
+ # 是否使用海外版小红书 (rednote.com)
+ # 开启后 API 走 webapi.rednote.com，cookie 域使用 .rednote.com
+ XHS_INTERNATIONAL = False
+ 
+-KEYWORDS = "编程副业,编程兼职"  # Keyword search configuration, separated by English commas
++KEYWORDS = "尊界V800"  # Keyword search configuration, separated by English commas
+ LOGIN_TYPE = "qrcode"  # qrcode or phone or cookie
+ COOKIES = ""
+ CRAWLER_TYPE = (
+@@ -66,7 +66,9 @@ CDP_DEBUG_PORT = 9222
+ # 如果为空，系统会自动检测 Chrome/Edge 的安装路径
+ # Windows 示例: "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"
+ # macOS 示例: "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+-CUSTOM_BROWSER_PATH = ""
++# 2026-11-09: 本机只装了 Edge、没有 Chrome，而非 CDP 模式硬编码 channel="chrome" 会直接启动失败。
++# 指定 Edge 之后，CDP 模式就能自动拉起浏览器，不需要手工加启动参数。
++CUSTOM_BROWSER_PATH = "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe"
+ 
+ # 是否在 CDP 模式下启用无头模式
+ # 注意：即使设置为 True，某些反检测功能在无头模式下可能无法正常工作
+@@ -80,7 +82,11 @@ BROWSER_LAUNCH_TIMEOUT = 60
+ # 用户需要在 Chrome 中开启远程调试：chrome://inspect/#remote-debugging
+ # 或者使用命令行参数启动 Chrome：--remote-debugging-port=9222
+ # 这种方式反检测效果最好，因为直接使用用户真实浏览器的所有 Cookie、扩展和浏览历史
+-CDP_CONNECT_EXISTING = True
++# 2026-11-09 晚：复用残留浏览器踩坑记录——连接虽然成功，但旧浏览器的 DevTools
++# 端点会被上一次运行的清理动作搞挂（connect_over_cdp 卡 60s 超时）。
++# 结论：与其复用 9 小时的僵尸浏览器，不如让它每次干净地自己拉起（用磁盘上保存的
++# 登录态，秒级启动，也不用扫码）。只有 9222 上确实有健康浏览器时才设 True。
++CDP_CONNECT_EXISTING = False
+ 
+ # 程序结束时是否自动关闭浏览器
+ # 设置为 False 可以保持浏览器运行，方便调试
+@@ -99,10 +105,10 @@ USER_DATA_DIR = "%s_user_data_dir"  # %s will be replaced by platform name
+ START_PAGE = 1
+ 
+ # Control the number of crawled videos/posts
+-CRAWLER_MAX_NOTES_COUNT = 15
++CRAWLER_MAX_NOTES_COUNT = 24
+ 
+ # Controlling the number of concurrent crawlers
+-MAX_CONCURRENCY_NUM = 1
++MAX_CONCURRENCY_NUM = 2  # [本任务临时修改 2026-11-10] 用户授权：避免并发抓取压低实际请求间隔（≥5秒规则）；原值 = 2，任务结束后恢复 [2026-11-12 任务结束，已恢复原值 2]
+ 
+ # 是否启用媒体下载（封面、视频，以及图文帖的图片），默认关闭。
+ # 开启后媒体文件按 {SAVE_DATA_PATH 或 data}/{platform}/media/{内容ID}/ 目录聚合存放。
+@@ -119,7 +125,7 @@ DOWNLOAD_LIVE_PHOTO = True
+ ENABLE_GET_COMMENTS = True
+ 
+ # Control the number of crawled first-level comments (single video/post)
+-CRAWLER_MAX_COMMENTS_COUNT_SINGLENOTES = 10
++CRAWLER_MAX_COMMENTS_COUNT_SINGLENOTES = 60
+ 
+ # Whether to enable the mode of crawling second-level comments. By default, crawling of second-level comments is not enabled.
+ # If the old version of the project uses db, you need to refer to schema/tables.sql line 287 to add table fields.
+@@ -127,7 +133,13 @@ ENABLE_GET_SUB_COMMENTS = False
+ 
+ # word cloud related
+ # Whether to enable generating comment word clouds
+-ENABLE_GET_WORDCLOUD = False
++ENABLE_GET_WORDCLOUD = True
++
++# 额外导出 Excel（2026-11-09 新增）
++# 词云图只能基于 json/jsonl 生成，一旦保存格式选 excel 就出不了词云。
++# 打开这个开关：主保存格式保持 json/jsonl（词云正常出图），
++# 爬取结束后再额外导出一份 Excel（Contents / Comments / Creators 多 sheet）。
++ENABLE_EXCEL_EXPORT = True
+ # Custom words and their groups
+ # Add rule: xx:yy where xx is a custom-added phrase, and yy is the group name to which the phrase xx is assigned.
+ CUSTOM_WORDS = {
+@@ -142,7 +154,29 @@ STOP_WORDS_FILE = "./docs/hit_stopwords.txt"
+ FONT_PATH = "./docs/STZHONGS.TTF"
+ 
+ # Crawl interval
+-CRAWLER_MAX_SLEEP_SEC = 2
++CRAWLER_MAX_SLEEP_SEC = 2  # [本任务临时修改 2026-11-10] 用户授权：爬取间隔≥5秒、翻页间隔≥3秒（微博全部sleep共用此常量）；原值 = 2，任务结束后恢复 [2026-11-12 任务结束，已恢复原值 2]
++
++# ============ B 站抓取提速开关（2026-11-09 新增） ============
++# 背景：一次 2~3 万条评论的抓取，旧逻辑要跑 70 分钟以上。主要原因是
++#   1) 视频级并发固定为 1，20 个视频排队一个个抓；
++#   2) 每个「有回复的评论楼」都要单独发一次请求，而且是 for 循环串行发；
++#   3) 每次请求后固定 sleep 2 秒，这部分几乎占了一半墙钟时间。
++# 下面三个开关把上面三点都改掉，默认值偏向「稳」而不是「最快」。
++# 想恢复旧行为：把 BILI_COMMENT_CONCURRENCY 设成 1、BILI_COMMENT_SLEEP_SEC 设成 2。
++
++# 全局同时在飞的评论请求数上限（视频之间、评论楼之间共用这一个上限）。
++# 1 = 老逻辑（完全串行）；4 通常能把抓评论这段压到原来的 1/3 左右；
++# 8 更快但更容易触发 B 站风控（412 / 需要验证）。建议不超过 6。
++BILI_COMMENT_CONCURRENCY = 4
++
++# 每次评论请求之后的等待秒数（老逻辑用的是上面的 CRAWLER_MAX_SLEEP_SEC=2）。
++# 0.6 比较稳；出现 412 或评论明显缺失时，调回 1.5 ~ 2。
++BILI_COMMENT_SLEEP_SEC = 0.6
++
++# 跨关键词/跨批次的视频去重：同一个 video_id 的评论只抓一次。
++# B 站搜索是字面匹配，多个关键词（如「尊界V800」和「尊界 刹车踏板」）会命中同一批视频，
++# 不去重就会把同一个视频的几千条评论重复抓两遍、三遍。
++BILI_DEDUPE_VIDEOS = True
+ 
+ # 是否禁用 SSL 证书验证。仅在使用企业代理、Burp Suite、mitmproxy 等会注入自签名证书的中间人代理时设为 True。
+ # 警告：禁用 SSL 验证将使所有流量暴露于中间人攻击风险，请勿在生产环境中开启。

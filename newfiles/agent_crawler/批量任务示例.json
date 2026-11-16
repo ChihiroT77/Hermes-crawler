@@ -1,0 +1,5 @@
+[
+  {"platform": "bili", "keywords": "人工智能", "count": 20, "name": "AI行业动态"},
+  {"platform": "bili", "keywords": "量子计算,可控核聚变", "count": 15, "comments": false, "name": "前沿科技"},
+  {"platform": "wb", "keywords": "新能源汽车", "count": 20, "format": "excel", "name": "新能源舆情"}
+]

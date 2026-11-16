@@ -1,0 +1,63 @@
+﻿diff --git a/api/schemas/crawler.py b/api/schemas/crawler.py
+index cfc995e..27270ec 100644
+--- a/api/schemas/crawler.py
++++ b/api/schemas/crawler.py
+@@ -17,11 +17,14 @@
+ # 使用本代码即表示您同意遵守上述原则和LICENSE中的所有条款。
+ 
+ from enum import Enum
+-from typing import Optional, Literal
++from typing import Any, Dict, Optional, Literal
+ from pydantic import BaseModel, Field
+ 
+ 
+-MAX_API_LIMIT_COUNT = 10000
++# Upper bound accepted by the WebUI for "how many notes / comments".
++# The WebUI exposes a free-form input so the crawler can be told to keep going
++# until the platform runs out of results.
++MAX_API_LIMIT_COUNT = 1000000
+ 
+ 
+ class PlatformEnum(str, Enum):
+@@ -58,6 +61,7 @@ class SaveDataOptionEnum(str, Enum):
+     SQLITE = "sqlite"
+     MONGODB = "mongodb"
+     EXCEL = "excel"
++    POSTGRES = "postgres"
+ 
+ 
+ class CrawlerStartRequest(BaseModel):
+@@ -72,11 +76,33 @@ class CrawlerStartRequest(BaseModel):
+     enable_comments: bool = True
+     enable_sub_comments: bool = False
+     enable_media: bool = False
++    # Generate a comment word cloud after crawling (requires comments + json/jsonl save option)
++    enable_wordcloud: bool = False
++    # Additionally export an Excel workbook (multi-sheet) after crawling while
++    # keeping the primary save option (json/jsonl), so the word cloud still works.
++    enable_excel_export: bool = False
+     save_option: SaveDataOptionEnum = SaveDataOptionEnum.JSONL
+     cookies: str = ""
+     headless: bool = False
+     max_notes_count: Optional[int] = Field(default=None, ge=1, le=MAX_API_LIMIT_COUNT)
+     max_comments_count: Optional[int] = Field(default=None, ge=1, le=MAX_API_LIMIT_COUNT)
++    # Concurrency of in-flight requests (1 = one at a time, safest)
++    max_concurrency: Optional[int] = Field(default=None, ge=1, le=32)
++    # Custom data directory; empty means the default <project>/data
++    save_data_path: str = ""
++    # ---- IP proxy ----
++    enable_ip_proxy: bool = False
++    ip_proxy_pool_count: Optional[int] = Field(default=None, ge=1, le=100)
++    ip_proxy_provider_name: str = ""
++    static_proxy_url: str = ""
++    # Third-party proxy credentials, passed to the crawler process as
++    # environment variables (see proxy/providers/*.py). Only known names are
++    # forwarded; the allowlist lives in api/services/crawler_manager.py.
++    ip_proxy_credentials: Dict[str, str] = Field(default_factory=dict)
++    # Everything else the WebUI controls and that has no dedicated flag:
++    # {"config": {...}, "db": {...}} -> applied to the config module by
++    # cmd_arg.arg._apply_config_overrides (whitelisted keys only).
++    config_overrides: Dict[str, Any] = Field(default_factory=dict)
+ 
+ 
+ class CrawlerStatusResponse(BaseModel):

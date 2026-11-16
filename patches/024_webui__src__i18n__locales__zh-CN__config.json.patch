@@ -1,0 +1,132 @@
+﻿diff --git a/webui/src/i18n/locales/zh-CN/config.json b/webui/src/i18n/locales/zh-CN/config.json
+index ff82c3b..d21f7f6 100644
+--- a/webui/src/i18n/locales/zh-CN/config.json
++++ b/webui/src/i18n/locales/zh-CN/config.json
+@@ -58,7 +58,126 @@
+     "downloadMedia": "下载媒体",
+     "downloadMediaHint": "下载封面与视频（图文笔记下载图片），支持小红书/抖音/快手/B站/微博",
+     "headlessMode": "无头模式",
+-    "headlessModeHint": "无 GUI 运行浏览器"
++    "headlessModeHint": "无 GUI 运行浏览器",
++    "excelExport": "同时导出 Excel",
++    "excelExportHint": "主格式之外再存一份 Excel 表格（多 sheet：内容/评论/作者）。词云图只支持 JSON/JSONL，所以这样表格和词云可以兼得",
++    "wordcloud": "生成词云图",
++    "wordcloudHint": "爬取结束后用评论生成词云图，输出到 data/平台/words/（需开评论 + JSON/JSONL 格式）"
++  },
++  "advanced": {
++    "title": "高级设置（6 类隐藏功能）",
++    "summary": "笔记 {{notes}} · 评论 {{comments}} · 并发 {{concurrency}}",
++    "expand": "展开调整",
++    "collapse": "收起",
++    "section": {
++      "scale": {
++        "title": "① 抓多少",
++        "description": "每个关键词抓多少条"
++      },
++      "speed": {
++        "title": "② 抓多快",
++        "description": "并发、间隔、实况照片"
++      },
++      "storage": {
++        "title": "③ 存哪儿",
++        "description": "数据目录与数据库连接"
++      },
++      "proxy": {
++        "title": "④ 换 IP",
++        "description": "代理池与代理凭据"
++      },
++      "platform": {
++        "title": "⑤ 平台专属",
++        "description": "当前平台的独有设置"
++      },
++      "wordcloud": {
++        "title": "⑥ 词云调优",
++        "description": "自定义词、停用词、字体"
++      }
++    },
++    "field": {
++      "maxNotes": "每个关键词最多抓多少条笔记/视频",
++      "maxNotesHint": "每个关键词单独计算，多个关键词要相乘。默认已拉到上限 100 万 = 抓到平台不再给为止；留空 = 程序默认（15 条）",
++      "maxComments": "每条最多抓多少条一级评论",
++      "maxCommentsHint": "只限制一级评论，二级评论不受限制。默认已拉到上限 100 万；留空 = 程序默认（10 条）",
++      "maxConcurrency": "并发数",
++      "maxConcurrencyHint": "同时进行的请求数。1 最稳，越大越快也越容易被平台限流（最大 32）",
++      "sleepSec": "每页间隔（秒）",
++      "sleepSecHint": "每翻一页等多久，0 = 不等待（更容易被限流）",
++      "downloadLivePhoto": "下载实况照片附带的视频",
++      "downloadLivePhotoHint": "需要先在上面勾选「下载媒体」",
++      "saveDataPath": "数据保存目录",
++      "saveDataPathHint": "留空 = 项目里的 data 目录",
++      "saveDataPathPlaceholder": "例如 D:\\爬虫数据\\data",
++      "dbHint": "当前保存格式是「{{format}}」，下面的连接信息会写进后端配置",
++      "dbHost": "数据库地址",
++      "dbPort": "端口",
++      "dbUser": "用户名",
++      "dbPassword": "密码",
++      "dbName": "库名",
++      "enableIpProxy": "启用 IP 代理",
++      "enableIpProxyHint": "用代理池轮换 IP，降低被限流的概率",
++      "ipProxyProvider": "代理服务商",
++      "ipProxyPoolCount": "代理池大小",
++      "ipProxyPoolCountHint": "一次取多少个 IP 备用",
++      "staticProxyUrl": "静态代理地址",
++      "staticProxyUrlHint": "形如 http://用户名:密码@主机:端口",
++      "proxyCredentialsHint": "以下参数在服务商后台查；只在这次爬取时用，不写进项目文件",
++      "kdlSecretId": "快代理 secret_id",
++      "kdlSignature": "快代理 signature",
++      "kdlUserName": "快代理 用户名",
++      "kdlUserPwd": "快代理 密码",
++      "wandouAppKey": "豌豆HTTP app_key",
++      "xhsSort": "排序方式",
++      "xhsSortHint": "小红书搜索结果按什么排",
++      "dyPublishTime": "发布时间范围",
++      "dyPublishTimeHint": "只抓这个时间范围内发布的视频；平台只给这四档，没有自定义日期",
++      "biliSearchMode": "搜索模式",
++      "biliSearchModeHint": "普通搜索完全不看日期；另外两种按天翻页，只抓日期区间内的视频",
++      "biliStartDay": "开始日期",
++      "biliEndDay": "结束日期",
++      "biliQn": "视频清晰度",
++      "biliQnHint": "下载视频时用的清晰度，越高越可能失败",
++      "biliMaxNotesPerDay": "每天最多抓多少条",
++      "biliMaxNotesPerDayHint": "两种「时间区间」模式都按这个数封顶，普通搜索不看它；填小了会抓得很少",
++      "weiboFullText": "抓取微博正文全文",
++      "weiboFullTextHint": "取消勾选则只抓摘要",
++      "noPlatformOptions": "{{platform}} 没有专属设置，用上面的通用选项即可",
++      "customWords": "自定义词",
++      "customWordsHint": "格式「词:分组」，多个用逗号分隔；防止专业词被切成碎片",
++      "customWordsPlaceholder": "例如 零几:年份, 高频词:专业术语",
++      "stopWordsFile": "停用词表",
++      "stopWordsFileHint": "一行一个词，默认 docs/hit_stopwords.txt",
++      "fontPath": "字体文件",
++      "fontPathHint": "中文词云需要中文字体，默认 docs/STZHONGS.TTF"
++    },
++    "option": {
++      "unlimitedShort": "上限",
++      "xhsSortGeneral": "综合",
++      "xhsSortPopular": "最热",
++      "xhsSortLatest": "最新",
++      "dyTimeAll": "不限",
++      "dyTimeDay": "一天内",
++      "dyTimeWeek": "一周内",
++      "dyTimeHalfYear": "半年内",
++      "biliModeNormal": "普通搜索（不看日期）",
++      "biliModeAllInRange": "时间区间内抓取（按天翻页）",
++      "biliModeDailyLimit": "时间区间内每日限量",
++      "qn1080": "1080P",
++      "qn1080Plus": "1080P 高码率",
++      "qn1080p60": "1080P 60帧",
++      "qn4k": "4K",
++      "proxyKuaidaili": "快代理 kuaidaili",
++      "proxyWandouhttp": "豌豆HTTP wandouhttp",
++      "proxyStatic": "静态代理（自己填地址）"
++    }
++  },
++  "toast": {
++    "wordcloudAutoComments": "已自动开启「评论抓取」：词云基于评论内容生成",
++    "wordcloudAutoExcel": "已顺手打开「同时导出 Excel」：词云需要 JSONL，表格照样给你",
++    "wordcloudAutoJsonl": "已自动把保存格式切到 JSONL：词云图仅支持 JSON/JSONL",
++    "biliDateEmpty": "B站时间区间没填完：开始日期和结束日期都要选",
++    "biliDateRange": "B站时间区间填反了：开始日期不能晚于结束日期"
+   },
+   "button": {
+     "initiateScan": "开始爬虫",

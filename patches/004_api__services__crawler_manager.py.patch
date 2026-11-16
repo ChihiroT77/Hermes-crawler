@@ -1,0 +1,100 @@
+﻿diff --git a/api/services/crawler_manager.py b/api/services/crawler_manager.py
+index 83119cc..f4212fa 100644
+--- a/api/services/crawler_manager.py
++++ b/api/services/crawler_manager.py
+@@ -17,6 +17,7 @@
+ # 使用本代码即表示您同意遵守上述原则和LICENSE中的所有条款。
+ 
+ import asyncio
++import json
+ import subprocess
+ import signal
+ import os
+@@ -27,6 +28,20 @@ from pathlib import Path
+ from ..schemas import CrawlerStartRequest, LogEntry
+ 
+ 
++# Environment variables the WebUI may forward to the crawler process. They hold
++# third-party IP proxy credentials (see proxy/providers/kuaidl_proxy.py and
++# proxy/providers/wandou_http_proxy.py).
++_ALLOWED_ENV_OVERRIDES = frozenset({
++    "KDL_SECERT_ID",
++    "KDL_SIGNATURE",
++    "KDL_USER_NAME",
++    "KDL_USER_PWD",
++    "WANDOU_APP_KEY",
++    "jisu_key",
++    "jisu_crypto",
++})
++
++
+ class CrawlerManager:
+     """Crawler process manager"""
+ 
+@@ -127,7 +142,7 @@ class CrawlerManager:
+                     encoding='utf-8',
+                     bufsize=1,
+                     cwd=str(self._project_root),
+-                    env={**os.environ, "PYTHONUNBUFFERED": "1"}
++                    env=self._build_env(config)
+                 )
+ 
+                 self.status = "running"
+@@ -202,6 +217,20 @@ class CrawlerManager:
+             "error_message": None
+         }
+ 
++    def _build_env(self, config: CrawlerStartRequest) -> dict:
++        """Environment for the crawler process.
++
++        Third-party IP proxy providers read their credentials from environment
++        variables, so the WebUI may pass a few of them through. Only names on
++        the allowlist are forwarded, so the payload can never repoint PATH or
++        any other variable the child process relies on.
++        """
++        env = {**os.environ, "PYTHONUNBUFFERED": "1"}
++        for key, value in (config.ip_proxy_credentials or {}).items():
++            if key in _ALLOWED_ENV_OVERRIDES and isinstance(value, str) and value.strip():
++                env[key] = value.strip()
++        return env
++
+     def _build_command(self, config: CrawlerStartRequest) -> list:
+         """Build main.py command line arguments"""
+         cmd = ["uv", "run", "python", "main.py"]
+@@ -225,6 +254,8 @@ class CrawlerManager:
+         cmd.extend(["--get_comment", "true" if config.enable_comments else "false"])
+         cmd.extend(["--get_sub_comment", "true" if config.enable_sub_comments else "false"])
+         cmd.extend(["--get_media", "true" if config.enable_media else "false"])
++        cmd.extend(["--get_wordcloud", "true" if config.enable_wordcloud else "false"])
++        cmd.extend(["--excel_export", "true" if config.enable_excel_export else "false"])
+ 
+         if config.max_notes_count is not None:
+             cmd.extend(["--crawler_max_notes_count", str(config.max_notes_count)])
+@@ -232,6 +263,27 @@ class CrawlerManager:
+         if config.max_comments_count is not None:
+             cmd.extend(["--max_comments_count_singlenotes", str(config.max_comments_count)])
+ 
++        if config.max_concurrency is not None:
++            cmd.extend(["--max_concurrency_num", str(config.max_concurrency)])
++
++        if config.save_data_path:
++            cmd.extend(["--save_data_path", config.save_data_path])
++
++        if config.enable_ip_proxy:
++            cmd.extend(["--enable_ip_proxy", "true"])
++            if config.ip_proxy_pool_count is not None:
++                cmd.extend(["--ip_proxy_pool_count", str(config.ip_proxy_pool_count)])
++            if config.ip_proxy_provider_name:
++                cmd.extend(["--ip_proxy_provider_name", config.ip_proxy_provider_name])
++            if config.static_proxy_url:
++                cmd.extend(["--static_proxy_url", config.static_proxy_url])
++
++        if config.config_overrides:
++            cmd.extend([
++                "--config_overrides",
++                json.dumps(config.config_overrides, ensure_ascii=False),
++            ])
++
+         if config.cookies:
+             cmd.extend(["--cookies", config.cookies])
+ 

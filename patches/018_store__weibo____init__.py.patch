@@ -1,0 +1,71 @@
+﻿diff --git a/store/weibo/__init__.py b/store/weibo/__init__.py
+index 5894011..7666f5e 100644
+--- a/store/weibo/__init__.py
++++ b/store/weibo/__init__.py
+@@ -28,6 +28,24 @@ from typing import List
+ from tools.user_hash import anonymize_user_id, mask_nickname
+ from var import source_keyword_var
+ 
++# 省级行政区名单，仅用于从评论 source（形如「来自 江苏」）里判断到底是不是 IP 属地
++_CN_PROVINCES = (
++    "北京", "天津", "上海", "重庆", "河北", "山西", "辽宁", "吉林", "黑龙江",
++    "江苏", "浙江", "安徽", "福建", "江西", "山东", "河南", "湖北", "湖南",
++    "广东", "海南", "四川", "贵州", "云南", "陕西", "甘肃", "青海", "台湾",
++    "内蒙古", "广西", "西藏", "宁夏", "新疆", "香港", "澳门",
++)
++
++
++def _ip_from_source(raw) -> str:
++    """微博评论的 source 有时是「来自 江苏」这种 IP 属地，有时是「来自 iPhone客户端」这种设备来源。
++    只把能对上省份名的取出来，对不上就留空，不猜。原值另存 comment_source。"""
++    text = str(raw).strip() if raw is not None else ""
++    if text.startswith("来自"):
++        text = text[2:].strip()
++    return text if text in _CN_PROVINCES else ""
++
++
+ from ._store_impl import *
+ 
+ 
+@@ -97,7 +115,8 @@ async def update_weibo_note(note_item: Dict):
+         "last_modify_ts": utils.get_current_timestamp(),
+         "note_url": f"https://m.weibo.cn/detail/{note_id}",
+ 
+-        # 创作者信息（匿名化/脱敏，不含原始 user_id/avatar/gender/profile_url/ip_location）
++        # 创作者信息（匿名化/脱敏，不含原始 user_id/avatar/gender/profile_url；
++        # 账号属性如 IP 属地/认证类型/粉丝数见下面评论部分，2026-11-12 起采集）
+         "creator_hash": anonymize_user_id(user_info.get("id")),
+         "nickname": mask_nickname(user_info.get("screen_name", "")),
+         "source_keyword": source_keyword_var.get(),
+@@ -139,7 +158,9 @@ async def update_weibo_note_comment(note_id: str, comment_item: Dict):
+     content_text = comment_item.get("text")
+     clean_text = re.sub(r"<.*?>", "", content_text)
+     # 教学版：原始 user_id 匿名化为 creator_hash，昵称脱敏；
+-    # 不采集头像/主页链接/性别/IP 归属地等可定位真人的信息。
++    # 不采集头像/主页链接/性别等可定位真人的信息。
++    # 2026-11-12 按负责人要求追加账号属性 5 项（IP 属地/认证类型/粉丝数/关注数/注册时间），
++    # 平台给什么原样存什么，不做类型转换、不清洗、不填空白。
+     save_comment_item = {
+         "comment_id": comment_id,
+         "create_time": utils.rfc2822_to_timestamp(comment_item.get("created_at")),
+@@ -151,9 +172,19 @@ async def update_weibo_note_comment(note_id: str, comment_item: Dict):
+         "last_modify_ts": utils.get_current_timestamp(),
+         "parent_comment_id": comment_item.get("rootid", ""),
+ 
+-        # 创作者信息（匿名化/脱敏，不含原始 user_id/avatar/gender/profile_url/ip_location）
++        # 创作者信息（匿名化/脱敏，不含原始 user_id/avatar/gender/profile_url）
+         "creator_hash": anonymize_user_id(user_info.get("id")),
+         "nickname": mask_nickname(user_info.get("screen_name", "")),
++
++        # 2026-11-12 追加：账号属性（平台原始值原样保存）
++        # IP 属地：微博把属地放在评论的 source 里，形如「来自 江苏」；source 原文一并留存供核对
++        "comment_source": comment_item.get("source"),
++        "ip_location": _ip_from_source(comment_item.get("source")),
++        "verification_type": user_info.get("verified_type"),
++        "fans_count": user_info.get("followers_count"),
++        "follow_count": user_info.get("follow_count"),
++        # 评论接口不返回注册时间，只能按用户单查 /ajax/profile/detail?uid=，此处留空不猜
++        "register_time": None,
+     }
+     utils.logger.info(f"[store.weibo.update_weibo_note_comment] Weibo note comment: {comment_id}, content: {save_comment_item.get('content', '')[:24]} ...")
+     await WeibostoreFactory.create_store().store_comment(comment_item=save_comment_item)

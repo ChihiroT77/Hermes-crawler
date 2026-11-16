@@ -1,0 +1,19 @@
+﻿diff --git a/model/m_baidu_tieba.py b/model/m_baidu_tieba.py
+index c068c38..0307bce 100644
+--- a/model/m_baidu_tieba.py
++++ b/model/m_baidu_tieba.py
+@@ -59,6 +59,14 @@ class TiebaComment(BaseModel):
+     tieba_id: str = Field(..., description="Tieba ID")
+     tieba_name: str = Field(..., description="Tieba name")
+     tieba_link: str = Field(..., description="Tieba link")
++    # 账号属性字段（2026-11-13 加）：平台页面原样给的能拿到就存，拿不到留 None，不猜
++    comment_source: Optional[str] = Field(default=None, description="IP属地原串(如 IP属地:江苏)")
++    ip_location: Optional[str] = Field(default=None, description="IP属地")
++    verification_type: Optional[str] = Field(default=None, description="认证类型(贴吧评论页不提供)")
++    verification_desc: Optional[str] = Field(default=None, description="认证说明原文")
++    fans_count: Optional[str] = Field(default=None, description="粉丝数(需按用户查主页，不采集)")
++    follow_count: Optional[str] = Field(default=None, description="关注数(需按用户查主页，不采集)")
++    register_time: Optional[str] = Field(default=None, description="注册时间(需按用户查主页，不采集)")
+ 
+ 
+ class TiebaCreator(BaseModel):

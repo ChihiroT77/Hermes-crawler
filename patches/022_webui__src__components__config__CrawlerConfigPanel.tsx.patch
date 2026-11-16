@@ -1,0 +1,746 @@
+﻿diff --git a/webui/src/components/config/CrawlerConfigPanel.tsx b/webui/src/components/config/CrawlerConfigPanel.tsx
+index b09762a..517cc51 100644
+--- a/webui/src/components/config/CrawlerConfigPanel.tsx
++++ b/webui/src/components/config/CrawlerConfigPanel.tsx
+@@ -1,7 +1,25 @@
+ import type { ComponentType, ReactNode, KeyboardEvent } from 'react'
+ import { useState } from 'react'
+ import { useTranslation } from 'react-i18next'
+-import { Database, Globe, Image as ImageIcon, KeyRound, MessageSquare, Play, Square, X } from 'lucide-react'
++import {
++  ChevronDown,
++  ChevronRight,
++  Cloud,
++  Database,
++  FileSpreadsheet,
++  Gauge,
++  Globe,
++  Hash,
++  Image as ImageIcon,
++  KeyRound,
++  MessageSquare,
++  Network,
++  Play,
++  SlidersHorizontal,
++  Square,
++  X,
++} from 'lucide-react'
++import { toast } from 'sonner'
+ import { Label } from '@/components/ui/label'
+ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+ import { Input } from '@/components/ui/input'
+@@ -9,6 +27,8 @@ import { Checkbox } from '@/components/ui/checkbox'
+ import { Button } from '@/components/ui/button'
+ import { useCrawlerStore } from '@/store/crawlerStore'
+ import { usePlatforms, useConfigOptions, useStartCrawler, useStopCrawler } from '@/hooks/useCrawler'
++import { MAX_CRAWL_COUNT } from '@/types/crawler'
++import { DB_DEFAULTS, isDbSaveOption } from '@/lib/crawlerRequest'
+ import { ParsedIdList } from './ParsedIdList'
+ 
+ type SectionProps = {
+@@ -66,6 +86,139 @@ function Field({ label, hint, children }: FieldProps) {
+   )
+ }
+ 
++type TextFieldProps = {
++  label: string
++  hint?: string
++  value: string
++  onChange: (value: string) => void
++  placeholder?: string
++  disabled?: boolean
++  type?: string
++}
++
++function TextField({ label, hint, value, onChange, placeholder, disabled, type = 'text' }: TextFieldProps) {
++  return (
++    <Field label={label} hint={hint}>
++      <Input
++        type={type}
++        value={value}
++        onChange={(e) => onChange(e.target.value)}
++        placeholder={placeholder}
++        disabled={disabled}
++        className="h-9 text-xs"
++      />
++    </Field>
++  )
++}
++
++type NumberFieldProps = {
++  label: string
++  hint?: string
++  value: number
++  onChange: (value: number) => void
++  min?: number
++  max?: number
++  disabled?: boolean
++  presets?: { label: string; value: number }[]
++}
++
++function NumberField({ label, hint, value, onChange, min = 1, max, disabled, presets }: NumberFieldProps) {
++  return (
++    <Field label={label} hint={hint}>
++      <Input
++        type="number"
++        min={min}
++        max={max}
++        value={value > 0 ? String(value) : ''}
++        onChange={(e) => {
++          const raw = e.target.value
++          if (raw.trim() === '') {
++            onChange(0)
++            return
++          }
++          const parsed = Number(raw)
++          onChange(Number.isFinite(parsed) ? parsed : 0)
++        }}
++        disabled={disabled}
++        className="h-9 text-xs font-mono"
++      />
++      {presets && presets.length > 0 ? (
++        <div className="flex flex-wrap gap-1.5">
++          {presets.map((preset) => (
++            <button
++              key={preset.label}
++              type="button"
++              disabled={disabled}
++              onClick={() => onChange(preset.value)}
++              className={`px-2 py-1 rounded border text-[10px] font-mono transition-colors disabled:opacity-50 ${
++                value === preset.value
++                  ? 'border-cyber-neon-cyan/60 bg-cyber-neon-cyan/15 text-cyber-neon-cyan'
++                  : 'border-cyber-border-subtle text-cyber-text-muted hover:border-cyber-border-DEFAULT hover:text-cyber-text-secondary'
++              }`}
++            >
++              {preset.label}
++            </button>
++          ))}
++        </div>
++      ) : null}
++    </Field>
++  )
++}
++
++type SelectFieldProps = {
++  label: string
++  hint?: string
++  value: string
++  onChange: (value: string) => void
++  options: { value: string; label: string }[]
++  disabled?: boolean
++  placeholder?: string
++}
++
++function SelectField({ label, hint, value, onChange, options, disabled, placeholder }: SelectFieldProps) {
++  return (
++    <Field label={label} hint={hint}>
++      <Select value={value} onValueChange={onChange} disabled={disabled}>
++        <SelectTrigger className="h-9 text-xs">
++          <SelectValue placeholder={placeholder} />
++        </SelectTrigger>
++        <SelectContent>
++          {options.map((option) => (
++            <SelectItem key={option.value} value={option.value}>
++              {option.label}
++            </SelectItem>
++          ))}
++        </SelectContent>
++      </Select>
++    </Field>
++  )
++}
++
++type CheckboxFieldProps = {
++  label: string
++  hint?: string
++  checked: boolean
++  onChange: (checked: boolean) => void
++  disabled?: boolean
++}
++
++function CheckboxField({ label, hint, checked, onChange, disabled }: CheckboxFieldProps) {
++  return (
++    <div className="flex items-start gap-3 rounded-lg border border-cyber-border-subtle bg-cyber-bg-tertiary/30 p-2.5 hover:border-cyber-border-DEFAULT transition-colors">
++      <Checkbox
++        checked={checked}
++        onCheckedChange={(value) => onChange(value === true)}
++        disabled={disabled}
++        className="mt-0.5"
++      />
++      <div className="min-w-0 flex-1">
++        <p className="text-xs font-mono text-cyber-text-primary">{label}</p>
++        {hint ? <p className="text-[10px] text-cyber-text-muted leading-snug">{hint}</p> : null}
++      </div>
++    </div>
++  )
++}
++
+ type KeywordInputProps = {
+   value: string
+   onChange: (value: string) => void
+@@ -146,7 +299,104 @@ export function CrawlerConfigPanel() {
+   const isRunning = status === 'running'
+   const isBusy = isStarting || isStopping || status === 'stopping'
+ 
++  // 高级设置默认展开（里面第一块就是「抓多少」，免得藏在折叠里找不到）
++  const [advancedOpen, setAdvancedOpen] = useState(true)
++
++  const limitLabel = t('advanced.option.unlimitedShort')
++  const formatCount = (value: number) => (value >= MAX_CRAWL_COUNT ? limitLabel : String(value))
++  const currentPlatformLabel = platforms?.find((item) => item.value === config.platform)?.label ?? config.platform
++
++  const countPresets = [
++    { label: '100', value: 100 },
++    { label: '300', value: 300 },
++    { label: '500', value: 500 },
++    { label: '1000', value: 1000 },
++    { label: limitLabel, value: MAX_CRAWL_COUNT },
++  ]
++  const commentPresets = [
++    { label: '100', value: 100 },
++    { label: '500', value: 500 },
++    { label: '2000', value: 2000 },
++    { label: limitLabel, value: MAX_CRAWL_COUNT },
++  ]
++  const concurrencyPresets = [
++    { label: '1', value: 1 },
++    { label: '3', value: 3 },
++    { label: '5', value: 5 },
++    { label: '10', value: 10 },
++  ]
++  const sleepPresets = [
++    { label: '0', value: 0 },
++    { label: '1', value: 1 },
++    { label: '2', value: 2 },
++    { label: '5', value: 5 },
++  ]
++  const biliNotesPerDayPresets = [
++    { label: '1', value: 1 },
++    { label: '3', value: 3 },
++    { label: '5', value: 5 },
++    { label: '10', value: 10 },
++  ]
++  const xhsSortOptions = [
++    { value: 'general', label: t('advanced.option.xhsSortGeneral') },
++    { value: 'popularity_descending', label: t('advanced.option.xhsSortPopular') },
++    { value: 'time_descending', label: t('advanced.option.xhsSortLatest') },
++  ]
++  // 值必须和爬虫里的 PublishTimeType 枚举一一对应：0 不限 / 1 一天内 / 7 一周内 / 180 半年内
++  // （写成 2、3 会让爬虫直接抛 ValueError: 2 is not a valid PublishTimeType）
++  const dyPublishTimeOptions = [
++    { value: '0', label: t('advanced.option.dyTimeAll') },
++    { value: '1', label: t('advanced.option.dyTimeDay') },
++    { value: '7', label: t('advanced.option.dyTimeWeek') },
++    { value: '180', label: t('advanced.option.dyTimeHalfYear') },
++  ]
++  const biliSearchModeOptions = [
++    { value: 'normal', label: t('advanced.option.biliModeNormal') },
++    { value: 'all_in_time_range', label: t('advanced.option.biliModeAllInRange') },
++    { value: 'daily_limit_in_time_range', label: t('advanced.option.biliModeDailyLimit') },
++  ]
++  const biliQnOptions = [
++    { value: '16', label: '360P' },
++    { value: '32', label: '480P' },
++    { value: '64', label: '720P' },
++    { value: '80', label: t('advanced.option.qn1080') },
++    { value: '112', label: t('advanced.option.qn1080Plus') },
++    { value: '116', label: t('advanced.option.qn1080p60') },
++    { value: '120', label: t('advanced.option.qn4k') },
++  ]
++  const proxyProviderOptions = [
++    { value: 'kuaidaili', label: t('advanced.option.proxyKuaidaili') },
++    { value: 'wandouhttp', label: t('advanced.option.proxyWandouhttp') },
++    { value: 'static', label: t('advanced.option.proxyStatic') },
++  ]
++
++  // 切换保存格式时，若数据库连接参数还是默认值，就跟着换成对应数据库的默认值
++  const handleSaveOptionChange = (value: string) => {
++    const defaults = DB_DEFAULTS[value]
++    if (!defaults) {
++      updateConfig({ save_option: value })
++      return
++    }
++    const stillDefault = Object.values(DB_DEFAULTS).some(
++      (item) => item.port === config.db_port && item.user === config.db_user,
++    )
++    updateConfig({
++      save_option: value,
++      ...(stillDefault ? { db_port: defaults.port, db_user: defaults.user } : {}),
++    })
++  }
++
+   const handleStart = () => {
++    if (config.platform === 'bili' && config.bili_search_mode !== 'normal') {
++      if (!config.bili_start_day || !config.bili_end_day) {
++        toast.error(t('toast.biliDateEmpty'))
++        return
++      }
++      if (config.bili_start_day > config.bili_end_day) {
++        toast.error(t('toast.biliDateRange'))
++        return
++      }
++    }
+     startCrawler(config)
+   }
+ 
+@@ -327,7 +577,7 @@ export function CrawlerConfigPanel() {
+           <Field label={t('field.saveFormat')}>
+             <Select
+               value={config.save_option}
+-              onValueChange={(value) => updateConfig({ save_option: value })}
++              onValueChange={handleSaveOptionChange}
+               disabled={isDisabled}
+             >
+               <SelectTrigger className="h-9 text-xs">
+@@ -388,6 +638,67 @@ export function CrawlerConfigPanel() {
+               </div>
+             </div>
+ 
++            <div className="flex items-center gap-3 rounded-lg border border-cyber-border-subtle bg-cyber-bg-tertiary/30 p-2.5 hover:border-cyber-border-DEFAULT transition-colors">
++              <Checkbox
++                checked={config.enable_wordcloud}
++                onCheckedChange={(checked) => {
++                  const isChecked = checked === true
++                  if (!isChecked) {
++                    updateConfig({ enable_wordcloud: false })
++                    return
++                  }
++                  // A word cloud needs comment data and the JSON/JSONL save option,
++                  // so fix those two conflicts automatically and tell the user.
++                  const needComments = !config.enable_comments
++                  const needJsonl = config.save_option !== 'json' && config.save_option !== 'jsonl'
++                  // 如果原本选的是 Excel：切到 JSONL 的同时打开「同时导出 Excel」，
++                  // 这样词云和表格都不会丢。
++                  const keepExcel = config.save_option === 'excel'
++                  updateConfig({
++                    enable_wordcloud: true,
++                    ...(needComments ? { enable_comments: true } : {}),
++                    ...(needJsonl ? { save_option: 'jsonl' } : {}),
++                    ...(keepExcel ? { enable_excel_export: true } : {}),
++                  })
++                  const notes = [
++                    needComments ? t('toast.wordcloudAutoComments') : '',
++                    needJsonl ? t('toast.wordcloudAutoJsonl') : '',
++                    keepExcel ? t('toast.wordcloudAutoExcel') : '',
++                  ].filter(Boolean)
++                  if (notes.length > 0) {
++                    toast.info(notes.join(' '))
++                  }
++                }}
++                disabled={isDisabled}
++              />
++              <div className="min-w-0 flex-1">
++                <div className="flex items-center gap-2">
++                  <Cloud className="h-3.5 w-3.5 text-cyber-text-secondary" />
++                  <p className="text-xs font-mono text-cyber-text-primary">{t('field.wordcloud')}</p>
++                </div>
++                <p className="text-[10px] text-cyber-text-muted leading-snug">
++                  {t('field.wordcloudHint')}
++                </p>
++              </div>
++            </div>
++
++            <div className="flex items-center gap-3 rounded-lg border border-cyber-border-subtle bg-cyber-bg-tertiary/30 p-2.5 hover:border-cyber-border-DEFAULT transition-colors">
++              <Checkbox
++                checked={config.enable_excel_export}
++                onCheckedChange={(checked) => updateConfig({ enable_excel_export: checked === true })}
++                disabled={isDisabled || isDbSaveOption(config.save_option)}
++              />
++              <div className="min-w-0 flex-1">
++                <div className="flex items-center gap-2">
++                  <FileSpreadsheet className="h-3.5 w-3.5 text-cyber-text-secondary" />
++                  <p className="text-xs font-mono text-cyber-text-primary">{t('field.excelExport')}</p>
++                </div>
++                <p className="text-[10px] text-cyber-text-muted leading-snug">
++                  {t('field.excelExportHint')}
++                </p>
++              </div>
++            </div>
++
+             <div className="flex items-center gap-3 rounded-lg border border-cyber-border-subtle bg-cyber-bg-tertiary/30 p-2.5 hover:border-cyber-border-DEFAULT transition-colors">
+               <Checkbox
+                 checked={config.headless}
+@@ -405,7 +716,382 @@ export function CrawlerConfigPanel() {
+         </Section>
+       </div>
+ 
+-      {/* Row 2: Start/Stop Button - Full Width */}
++      {/* Row 2: Advanced settings, collapsed by default */}
++      <div className="rounded-lg glass-panel float-panel overflow-hidden">
++        <button
++          type="button"
++          onClick={() => setAdvancedOpen((open) => !open)}
++          className="w-full px-4 py-3 flex items-center gap-3 text-left hover:bg-cyber-bg-tertiary/40 transition-colors"
++        >
++          <span className="h-8 w-8 rounded-md bg-cyber-bg-tertiary border border-cyber-border-subtle flex items-center justify-center flex-shrink-0">
++            <SlidersHorizontal className="h-4 w-4 text-cyber-neon-cyan" />
++          </span>
++          <span className="min-w-0 flex-1">
++            <span className="block text-xs font-mono font-semibold text-cyber-text-primary tracking-wide">
++              {t('advanced.title')}
++            </span>
++            <span className="block text-[10px] text-cyber-text-muted leading-snug truncate">
++              {t('advanced.summary', {
++                notes: formatCount(config.max_notes_count),
++                comments: formatCount(config.max_comments_count),
++                concurrency: config.max_concurrency,
++              })}
++            </span>
++          </span>
++          <span className="flex items-center gap-2 flex-shrink-0">
++            <span className="hidden sm:inline text-[10px] font-mono text-cyber-text-muted">
++              {advancedOpen ? t('advanced.collapse') : t('advanced.expand')}
++            </span>
++            {advancedOpen ? (
++              <ChevronDown className="h-4 w-4 text-cyber-text-muted" />
++            ) : (
++              <ChevronRight className="h-4 w-4 text-cyber-text-muted" />
++            )}
++          </span>
++        </button>
++
++        {advancedOpen ? (
++          <div className="p-4 border-t border-cyber-border-subtle/50 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
++            {/* 1. 抓多少 */}
++            <Section
++              title={t('advanced.section.scale.title')}
++              description={t('advanced.section.scale.description')}
++              icon={Hash}
++            >
++              <NumberField
++                label={t('advanced.field.maxNotes')}
++                hint={t('advanced.field.maxNotesHint')}
++                value={config.max_notes_count}
++                onChange={(value) => updateConfig({ max_notes_count: value })}
++                min={1}
++                max={MAX_CRAWL_COUNT}
++                presets={countPresets}
++                disabled={isDisabled}
++              />
++              <NumberField
++                label={t('advanced.field.maxComments')}
++                hint={t('advanced.field.maxCommentsHint')}
++                value={config.max_comments_count}
++                onChange={(value) => updateConfig({ max_comments_count: value })}
++                min={1}
++                max={MAX_CRAWL_COUNT}
++                presets={commentPresets}
++                disabled={isDisabled}
++              />
++            </Section>
++
++            {/* 2. 抓多快 */}
++            <Section
++              title={t('advanced.section.speed.title')}
++              description={t('advanced.section.speed.description')}
++              icon={Gauge}
++            >
++              <NumberField
++                label={t('advanced.field.maxConcurrency')}
++                hint={t('advanced.field.maxConcurrencyHint')}
++                value={config.max_concurrency}
++                onChange={(value) => updateConfig({ max_concurrency: value })}
++                min={1}
++                max={32}
++                presets={concurrencyPresets}
++                disabled={isDisabled}
++              />
++              <NumberField
++                label={t('advanced.field.sleepSec')}
++                hint={t('advanced.field.sleepSecHint')}
++                value={config.sleep_sec}
++                onChange={(value) => updateConfig({ sleep_sec: value })}
++                min={0}
++                max={60}
++                presets={sleepPresets}
++                disabled={isDisabled}
++              />
++              <CheckboxField
++                label={t('advanced.field.downloadLivePhoto')}
++                hint={t('advanced.field.downloadLivePhotoHint')}
++                checked={config.download_live_photo}
++                onChange={(checked) => updateConfig({ download_live_photo: checked })}
++                disabled={isDisabled || !config.enable_media}
++              />
++            </Section>
++
++            {/* 3. 存哪儿 */}
++            <Section
++              title={t('advanced.section.storage.title')}
++              description={t('advanced.section.storage.description')}
++              icon={Database}
++            >
++              <TextField
++                label={t('advanced.field.saveDataPath')}
++                hint={t('advanced.field.saveDataPathHint')}
++                value={config.save_data_path}
++                onChange={(value) => updateConfig({ save_data_path: value })}
++                placeholder={t('advanced.field.saveDataPathPlaceholder')}
++                disabled={isDisabled}
++              />
++              {isDbSaveOption(config.save_option) ? (
++                <div className="space-y-3 rounded-lg border border-cyber-border-subtle bg-cyber-bg-tertiary/20 p-3">
++                  <p className="text-[10px] text-cyber-text-muted leading-snug">
++                    {t('advanced.field.dbHint', { format: config.save_option })}
++                  </p>
++                  <TextField
++                    label={t('advanced.field.dbHost')}
++                    value={config.db_host}
++                    onChange={(value) => updateConfig({ db_host: value })}
++                    placeholder="localhost"
++                    disabled={isDisabled}
++                  />
++                  <div className="grid grid-cols-2 gap-3">
++                    <NumberField
++                      label={t('advanced.field.dbPort')}
++                      value={config.db_port}
++                      onChange={(value) => updateConfig({ db_port: value })}
++                      min={1}
++                      max={65535}
++                      disabled={isDisabled}
++                    />
++                    <TextField
++                      label={t('advanced.field.dbName')}
++                      value={config.db_name}
++                      onChange={(value) => updateConfig({ db_name: value })}
++                      disabled={isDisabled}
++                    />
++                  </div>
++                  <TextField
++                    label={t('advanced.field.dbUser')}
++                    value={config.db_user}
++                    onChange={(value) => updateConfig({ db_user: value })}
++                    disabled={isDisabled}
++                  />
++                  <TextField
++                    label={t('advanced.field.dbPassword')}
++                    type="password"
++                    value={config.db_password}
++                    onChange={(value) => updateConfig({ db_password: value })}
++                    disabled={isDisabled}
++                  />
++                </div>
++              ) : null}
++            </Section>
++
++            {/* 4. 换 IP */}
++            <Section
++              title={t('advanced.section.proxy.title')}
++              description={t('advanced.section.proxy.description')}
++              icon={Network}
++            >
++              <CheckboxField
++                label={t('advanced.field.enableIpProxy')}
++                hint={t('advanced.field.enableIpProxyHint')}
++                checked={config.enable_ip_proxy}
++                onChange={(checked) => updateConfig({ enable_ip_proxy: checked })}
++                disabled={isDisabled}
++              />
++              {config.enable_ip_proxy ? (
++                <>
++                  <SelectField
++                    label={t('advanced.field.ipProxyProvider')}
++                    value={config.ip_proxy_provider_name}
++                    onChange={(value) => updateConfig({ ip_proxy_provider_name: value })}
++                    options={proxyProviderOptions}
++                    disabled={isDisabled}
++                  />
++                  {config.ip_proxy_provider_name === 'static' ? (
++                    <TextField
++                      label={t('advanced.field.staticProxyUrl')}
++                      hint={t('advanced.field.staticProxyUrlHint')}
++                      value={config.static_proxy_url}
++                      onChange={(value) => updateConfig({ static_proxy_url: value })}
++                      placeholder="http://user:pass@127.0.0.1:8888"
++                      disabled={isDisabled}
++                    />
++                  ) : (
++                    <NumberField
++                      label={t('advanced.field.ipProxyPoolCount')}
++                      hint={t('advanced.field.ipProxyPoolCountHint')}
++                      value={config.ip_proxy_pool_count}
++                      onChange={(value) => updateConfig({ ip_proxy_pool_count: value })}
++                      min={1}
++                      max={100}
++                      disabled={isDisabled}
++                    />
++                  )}
++                  {config.ip_proxy_provider_name === 'kuaidaili' ? (
++                    <div className="space-y-3 rounded-lg border border-cyber-border-subtle bg-cyber-bg-tertiary/20 p-3">
++                      <p className="text-[10px] text-cyber-text-muted leading-snug">
++                        {t('advanced.field.proxyCredentialsHint')}
++                      </p>
++                      <TextField
++                        label={t('advanced.field.kdlSecretId')}
++                        value={config.kdl_secret_id}
++                        onChange={(value) => updateConfig({ kdl_secret_id: value })}
++                        disabled={isDisabled}
++                      />
++                      <TextField
++                        label={t('advanced.field.kdlSignature')}
++                        value={config.kdl_signature}
++                        onChange={(value) => updateConfig({ kdl_signature: value })}
++                        disabled={isDisabled}
++                      />
++                      <TextField
++                        label={t('advanced.field.kdlUserName')}
++                        value={config.kdl_user_name}
++                        onChange={(value) => updateConfig({ kdl_user_name: value })}
++                        disabled={isDisabled}
++                      />
++                      <TextField
++                        label={t('advanced.field.kdlUserPwd')}
++                        type="password"
++                        value={config.kdl_user_pwd}
++                        onChange={(value) => updateConfig({ kdl_user_pwd: value })}
++                        disabled={isDisabled}
++                      />
++                    </div>
++                  ) : null}
++                  {config.ip_proxy_provider_name === 'wandouhttp' ? (
++                    <div className="space-y-3 rounded-lg border border-cyber-border-subtle bg-cyber-bg-tertiary/20 p-3">
++                      <p className="text-[10px] text-cyber-text-muted leading-snug">
++                        {t('advanced.field.proxyCredentialsHint')}
++                      </p>
++                      <TextField
++                        label={t('advanced.field.wandouAppKey')}
++                        value={config.wandou_app_key}
++                        onChange={(value) => updateConfig({ wandou_app_key: value })}
++                        disabled={isDisabled}
++                      />
++                    </div>
++                  ) : null}
++                </>
++              ) : null}
++            </Section>
++
++            {/* 5. 平台专属 */}
++            <Section
++              title={t('advanced.section.platform.title')}
++              description={t('advanced.section.platform.description')}
++              icon={SlidersHorizontal}
++            >
++              {config.platform === 'xhs' ? (
++                <SelectField
++                  label={t('advanced.field.xhsSort')}
++                  hint={t('advanced.field.xhsSortHint')}
++                  value={config.xhs_sort}
++                  onChange={(value) => updateConfig({ xhs_sort: value })}
++                  options={xhsSortOptions}
++                  disabled={isDisabled}
++                />
++              ) : null}
++              {config.platform === 'dy' ? (
++                <SelectField
++                  label={t('advanced.field.dyPublishTime')}
++                  hint={t('advanced.field.dyPublishTimeHint')}
++                  value={String(config.dy_publish_time)}
++                  onChange={(value) => updateConfig({ dy_publish_time: Number(value) })}
++                  options={dyPublishTimeOptions}
++                  disabled={isDisabled}
++                />
++              ) : null}
++              {config.platform === 'bili' ? (
++                <>
++                  <SelectField
++                    label={t('advanced.field.biliSearchMode')}
++                    hint={t('advanced.field.biliSearchModeHint')}
++                    value={config.bili_search_mode}
++                    onChange={(value) => updateConfig({ bili_search_mode: value })}
++                    options={biliSearchModeOptions}
++                    disabled={isDisabled}
++                  />
++                  {config.bili_search_mode !== 'normal' ? (
++                    <>
++                      <div className="grid grid-cols-2 gap-3">
++                        <TextField
++                          label={t('advanced.field.biliStartDay')}
++                          type="date"
++                          value={config.bili_start_day}
++                          onChange={(value) => updateConfig({ bili_start_day: value })}
++                          disabled={isDisabled}
++                        />
++                        <TextField
++                          label={t('advanced.field.biliEndDay')}
++                          type="date"
++                          value={config.bili_end_day}
++                          onChange={(value) => updateConfig({ bili_end_day: value })}
++                          disabled={isDisabled}
++                        />
++                      </div>
++                      {/* 两种时间区间模式都按这个数每天封顶，所以两种模式都要能改 */}
++                      <NumberField
++                        label={t('advanced.field.biliMaxNotesPerDay')}
++                        hint={t('advanced.field.biliMaxNotesPerDayHint')}
++                        value={config.bili_max_notes_per_day}
++                        onChange={(value) => updateConfig({ bili_max_notes_per_day: value })}
++                        min={1}
++                        max={1000}
++                        presets={biliNotesPerDayPresets}
++                        disabled={isDisabled}
++                      />
++                    </>
++                  ) : null}
++                  <SelectField
++                    label={t('advanced.field.biliQn')}
++                    hint={t('advanced.field.biliQnHint')}
++                    value={String(config.bili_qn)}
++                    onChange={(value) => updateConfig({ bili_qn: Number(value) })}
++                    options={biliQnOptions}
++                    disabled={isDisabled}
++                  />
++                </>
++              ) : null}
++              {config.platform === 'wb' ? (
++                <CheckboxField
++                  label={t('advanced.field.weiboFullText')}
++                  hint={t('advanced.field.weiboFullTextHint')}
++                  checked={config.weibo_full_text}
++                  onChange={(checked) => updateConfig({ weibo_full_text: checked })}
++                  disabled={isDisabled}
++                />
++              ) : null}
++              {['ks', 'tieba', 'zhihu'].includes(config.platform) ? (
++                <p className="text-[10px] text-cyber-text-muted leading-snug">
++                  {t('advanced.field.noPlatformOptions', { platform: currentPlatformLabel })}
++                </p>
++              ) : null}
++            </Section>
++
++            {/* 6. 词云调优 */}
++            <Section
++              title={t('advanced.section.wordcloud.title')}
++              description={t('advanced.section.wordcloud.description')}
++              icon={Cloud}
++            >
++              <TextField
++                label={t('advanced.field.customWords')}
++                hint={t('advanced.field.customWordsHint')}
++                value={config.custom_words}
++                onChange={(value) => updateConfig({ custom_words: value })}
++                placeholder={t('advanced.field.customWordsPlaceholder')}
++                disabled={isDisabled}
++              />
++              <TextField
++                label={t('advanced.field.stopWordsFile')}
++                hint={t('advanced.field.stopWordsFileHint')}
++                value={config.stop_words_file}
++                onChange={(value) => updateConfig({ stop_words_file: value })}
++                disabled={isDisabled}
++              />
++              <TextField
++                label={t('advanced.field.fontPath')}
++                hint={t('advanced.field.fontPathHint')}
++                value={config.font_path}
++                onChange={(value) => updateConfig({ font_path: value })}
++                disabled={isDisabled}
++              />
++            </Section>
++          </div>
++        ) : null}
++      </div>
++
++      {/* Row 3: Start/Stop Button - Full Width */}
+       <div className="w-full">
+         {isRunning ? (
+           <Button

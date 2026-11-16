@@ -1,0 +1,25 @@
+﻿diff --git a/api/main.py b/api/main.py
+index af49b15..333594c 100644
+--- a/api/main.py
++++ b/api/main.py
+@@ -71,7 +71,11 @@ async def serve_frontend():
+     """Return frontend page"""
+     index_path = os.path.join(WEBUI_DIR, "index.html")
+     if os.path.exists(index_path):
+-        return FileResponse(index_path)
++        # 不缓存入口页，重建前端后普通刷新即可拿到新资源（资源文件名带哈希）
++        return FileResponse(
++            index_path,
++            headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
++        )
+     return {
+         "message": "MediaCrawler WebUI API",
+         "version": "1.0.0",
+@@ -184,6 +188,7 @@ async def get_config_options():
+             {"value": "sqlite", "label": "SQLite Database"},
+             {"value": "db", "label": "MySQL Database"},
+             {"value": "mongodb", "label": "MongoDB Database"},
++            {"value": "postgres", "label": "PostgreSQL Database"},
+         ],
+     }
+ 

@@ -1,0 +1,269 @@
+﻿diff --git a/cmd_arg/arg.py b/cmd_arg/arg.py
+index 8ea133d..3d7a8b7 100644
+--- a/cmd_arg/arg.py
++++ b/cmd_arg/arg.py
+@@ -23,6 +23,7 @@ from __future__ import annotations
+ 
+ import sys
+ import re
++import json
+ from enum import Enum
+ from types import SimpleNamespace
+ from typing import Iterable, Optional, Sequence, Type, TypeVar
+@@ -31,6 +32,7 @@ import typer
+ from typing_extensions import Annotated
+ 
+ import config
++from tools import utils
+ from tools.utils import str2bool
+ 
+ 
+@@ -151,6 +153,170 @@ def _normalize_tieba_creator_url(value: str) -> str:
+     return f"https://tieba.baidu.com/home/main?id={value}"
+ 
+ 
++# ---------------------------------------------------------------------------
++# Generic config overrides (WebUI advanced settings)
++# ---------------------------------------------------------------------------
++# Attributes of the `config` package that the WebUI may change through
++# --config_overrides. Only settings WITHOUT a dedicated CLI flag are listed
++# here; the dedicated flags below keep working unchanged and always win.
++_OVERRIDABLE_CONFIG_KEYS: frozenset = frozenset({
++    # crawl scale / speed
++    "CRAWLER_MAX_NOTES_COUNT",
++    "CRAWLER_MAX_COMMENTS_COUNT_SINGLENOTES",
++    "MAX_CONCURRENCY_NUM",
++    "CRAWLER_MAX_SLEEP_SEC",
++    # B 站提速开关（2026-11-09 新增，支持通过 --config_overrides 调，不用改文件）
++    "BILI_COMMENT_CONCURRENCY",
++    "BILI_COMMENT_SLEEP_SEC",
++    "BILI_DEDUPE_VIDEOS",
++    # storage / media
++    "SAVE_DATA_PATH",
++    "DOWNLOAD_LIVE_PHOTO",
++    "SAVE_LOGIN_STATE",
++    "USER_DATA_DIR",
++    # proxy
++    "ENABLE_IP_PROXY",
++    "IP_PROXY_POOL_COUNT",
++    "IP_PROXY_PROVIDER_NAME",
++    "STATIC_PROXY_URL",
++    # browser / CDP
++    "ENABLE_CDP_MODE",
++    "CDP_HEADLESS",
++    "CDP_DEBUG_PORT",
++    "CDP_CONNECT_EXISTING",
++    "AUTO_CLOSE_BROWSER",
++    "CUSTOM_BROWSER_PATH",
++    "BROWSER_LAUNCH_TIMEOUT",
++    "DISABLE_SSL_VERIFY",
++    "HEADLESS",
++    "XHS_INTERNATIONAL",
++    # word cloud tuning
++    "CUSTOM_WORDS",
++    "STOP_WORDS_FILE",
++    "FONT_PATH",
++    # platform specific filters
++    "SORT_TYPE",
++    "PUBLISH_TIME_TYPE",
++    "START_DAY",
++    "END_DAY",
++    "BILI_SEARCH_MODE",
++    "BILI_QN",
++    "MAX_NOTES_PER_DAY",
++    "ENABLE_WEIBO_FULL_TEXT",
++    "WEIBO_SEARCH_TYPE",
++    "CREATOR_MODE",
++    "START_CONTACTS_PAGE",
++    "CRAWLER_MAX_CONTACTS_COUNT_SINGLENOTES",
++    "CRAWLER_MAX_DYNAMICS_COUNT_SINGLENOTES",
++    "TIEBA_NAME_LIST",
++})
++
++# Database sections accepted under payload["db"]
++_DB_OVERRIDE_SPECS = {
++    "mysql": ("mysql_db_config", ("host", "port", "user", "password", "db_name")),
++    "mongodb": ("mongodb_config", ("host", "port", "user", "password", "db_name")),
++    "postgres": ("postgres_db_config", ("host", "port", "user", "password", "db_name")),
++}
++
++
++def _coerce_override_value(current, value):
++    """Cast an incoming JSON value to the type of the value it replaces."""
++    if isinstance(current, bool):
++        if isinstance(value, bool):
++            return value
++        return str(value).strip().lower() in {"1", "true", "t", "yes", "y", "on"}
++    if isinstance(current, int):
++        return int(float(value))
++    if isinstance(current, float):
++        return float(value)
++    if isinstance(current, dict):
++        return value if isinstance(value, dict) else json.loads(value)
++    if isinstance(current, (list, tuple)):
++        if isinstance(value, (list, tuple)):
++            return list(value)
++        return [item.strip() for item in str(value).split(",") if item.strip()]
++    if current is None:
++        return value
++    return str(value)
++
++
++def _apply_config_overrides(raw: Optional[str]) -> list:
++    """Apply a JSON blob of config overrides, returning the applied keys.
++
++    Expected shape::
++
++        {"config": {"CRAWLER_MAX_SLEEP_SEC": 3, "SORT_TYPE": "time_descending"},
++         "db": {"mysql": {"host": "127.0.0.1", "port": 3306, ...}}}
++
++    Non-whitelisted keys are ignored with a warning, so a stale WebUI can never
++    inject arbitrary attributes into the config module.
++    """
++    if not raw or not str(raw).strip():
++        return []
++
++    try:
++        payload = json.loads(raw)
++    except json.JSONDecodeError as exc:
++        utils.logger.warning(f"[config_overrides] Ignored invalid JSON: {exc}")
++        return []
++    if not isinstance(payload, dict):
++        utils.logger.warning("[config_overrides] Ignored: expected a JSON object")
++        return []
++
++    applied: list = []
++
++    config_items = payload.get("config") or {}
++    if isinstance(config_items, dict):
++        for key, value in config_items.items():
++            if key not in _OVERRIDABLE_CONFIG_KEYS:
++                utils.logger.warning(f"[config_overrides] Skip non-whitelisted config key: {key}")
++                continue
++            if not hasattr(config, key):
++                utils.logger.warning(f"[config_overrides] Skip unknown config key: {key}")
++                continue
++            try:
++                new_value = _coerce_override_value(getattr(config, key), value)
++            except (TypeError, ValueError, json.JSONDecodeError) as exc:
++                utils.logger.warning(f"[config_overrides] Skip {key}: invalid value {value!r} ({exc})")
++                continue
++            setattr(config, key, new_value)
++            applied.append(key)
++            utils.logger.info(f"[config_overrides] config.{key} = {new_value!r}")
++
++    db_items = payload.get("db") or {}
++    if isinstance(db_items, dict):
++        from config import db_config as db_config_module
++
++        for section, values in db_items.items():
++            spec = _DB_OVERRIDE_SPECS.get(section)
++            if spec is None or not isinstance(values, dict):
++                utils.logger.warning(f"[config_overrides] Skip unknown database section: {section}")
++                continue
++            attr_name, allowed_fields = spec
++            target = getattr(db_config_module, attr_name, None)
++            if not isinstance(target, dict):
++                continue
++            for field_name, value in values.items():
++                if field_name not in allowed_fields:
++                    utils.logger.warning(
++                        f"[config_overrides] Skip {section}.{field_name}: unsupported database field"
++                    )
++                    continue
++                try:
++                    target[field_name] = _coerce_override_value(target.get(field_name), value)
++                except (TypeError, ValueError, json.JSONDecodeError) as exc:
++                    utils.logger.warning(
++                        f"[config_overrides] Skip {section}.{field_name}: invalid value {value!r} ({exc})"
++                    )
++                    continue
++                applied.append(f"db.{section}.{field_name}")
++            utils.logger.info(f"[config_overrides] db_config.{attr_name} updated")
++
++    if not applied:
++        utils.logger.warning("[config_overrides] Nothing was applied")
++    return applied
++
++
+ async def parse_cmd(argv: Optional[Sequence[str]] = None):
+     """Parse command line arguments using Typer."""
+ 
+@@ -225,6 +391,24 @@ async def parse_cmd(argv: Optional[Sequence[str]] = None):
+                 show_default=True,
+             ),
+         ] = str(config.ENABLE_GET_MEDIA),
++        get_wordcloud: Annotated[
++            str,
++            typer.Option(
++                "--get_wordcloud",
++                help="Whether to generate a comment word cloud after crawling, supports yes/true/t/y/1 or no/false/f/n/0 (needs comments enabled and json/jsonl save option)",
++                rich_help_panel="Storage Configuration",
++                show_default=True,
++            ),
++        ] = str(config.ENABLE_GET_WORDCLOUD),
++        excel_export: Annotated[
++            str,
++            typer.Option(
++                "--excel_export",
++                help="Whether to additionally export an Excel workbook (multi-sheet) after crawling, supports yes/true/t/y/1 or no/false/f/n/0 (keeps the json/jsonl save option so the word cloud still works)",
++                rich_help_panel="Storage Configuration",
++                show_default=True,
++            ),
++        ] = str(config.ENABLE_EXCEL_EXPORT),
+         headless: Annotated[
+             str,
+             typer.Option(
+@@ -341,12 +525,22 @@ async def parse_cmd(argv: Optional[Sequence[str]] = None):
+                 rich_help_panel="Proxy Configuration",
+             ),
+         ] = config.STATIC_PROXY_URL,
++        config_overrides: Annotated[
++            str,
++            typer.Option(
++                "--config_overrides",
++                help='JSON object overriding config values, e.g. {"config": {"CRAWLER_MAX_SLEEP_SEC": 3}, "db": {"mysql": {"host": "127.0.0.1"}}}',
++                rich_help_panel="Advanced Configuration",
++            ),
++        ] = "",
+     ) -> SimpleNamespace:
+         """MediaCrawler 命令行入口"""
+ 
+         enable_comment = _to_bool(get_comment)
+         enable_sub_comment = _to_bool(get_sub_comment)
+         enable_media = _to_bool(get_media)
++        enable_wordcloud = _to_bool(get_wordcloud)
++        enable_excel_export = _to_bool(excel_export)
+         enable_headless = _to_bool(headless)
+         enable_ip_proxy_value = _to_bool(enable_ip_proxy)
+         init_db_value = init_db.value if init_db else None
+@@ -364,6 +558,8 @@ async def parse_cmd(argv: Optional[Sequence[str]] = None):
+         config.ENABLE_GET_COMMENTS = enable_comment
+         config.ENABLE_GET_SUB_COMMENTS = enable_sub_comment
+         config.ENABLE_GET_MEDIA = enable_media
++        config.ENABLE_GET_WORDCLOUD = enable_wordcloud
++        config.ENABLE_EXCEL_EXPORT = enable_excel_export
+         config.HEADLESS = enable_headless
+         config.CDP_HEADLESS = enable_headless
+         config.SAVE_DATA_OPTION = save_data_option.value
+@@ -377,6 +573,11 @@ async def parse_cmd(argv: Optional[Sequence[str]] = None):
+         config.IP_PROXY_PROVIDER_NAME = ip_proxy_provider_name
+         config.STATIC_PROXY_URL = static_proxy_url
+ 
++        # WebUI advanced settings: settings that have no dedicated flag above.
++        # Applied last so an explicit flag can never be clobbered by a stale
++        # override payload.
++        _apply_config_overrides(config_overrides)
++
+         # Set platform-specific ID lists for detail/creator mode
+         if specified_id_list:
+             if platform == PlatformEnum.XHS:
+@@ -421,6 +622,8 @@ async def parse_cmd(argv: Optional[Sequence[str]] = None):
+             get_comment=config.ENABLE_GET_COMMENTS,
+             get_sub_comment=config.ENABLE_GET_SUB_COMMENTS,
+             get_media=config.ENABLE_GET_MEDIA,
++            get_wordcloud=config.ENABLE_GET_WORDCLOUD,
++            excel_export=config.ENABLE_EXCEL_EXPORT,
+             headless=config.HEADLESS,
+             save_data_option=config.SAVE_DATA_OPTION,
+             init_db=init_db_value,

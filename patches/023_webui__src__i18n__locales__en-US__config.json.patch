@@ -1,0 +1,132 @@
+﻿diff --git a/webui/src/i18n/locales/en-US/config.json b/webui/src/i18n/locales/en-US/config.json
+index 00d7a00..765c4a5 100644
+--- a/webui/src/i18n/locales/en-US/config.json
++++ b/webui/src/i18n/locales/en-US/config.json
+@@ -58,7 +58,126 @@
+     "downloadMedia": "DOWNLOAD_MEDIA",
+     "downloadMediaHint": "Download cover and video (images for image posts). Supports xhs/dy/ks/bili/wb",
+     "headlessMode": "HEADLESS_MODE",
+-    "headlessModeHint": "Run browser without GUI"
++    "headlessModeHint": "Run browser without GUI",
++    "excelExport": "ALSO_EXPORT_EXCEL",
++    "excelExportHint": "Write an extra Excel workbook (sheets: contents/comments/creators) next to the main save format, so you keep both the table and the word cloud",
++    "wordcloud": "WORD_CLOUD",
++    "wordcloudHint": "Build a comment word cloud after crawling, saved to data/<platform>/words/ (needs comments + JSON/JSONL)"
++  },
++  "advanced": {
++    "title": "ADVANCED SETTINGS (6 HIDDEN GROUPS)",
++    "summary": "notes {{notes}} · comments {{comments}} · concurrency {{concurrency}}",
++    "expand": "expand",
++    "collapse": "collapse",
++    "section": {
++      "scale": {
++        "title": "1. HOW MUCH",
++        "description": "Notes per keyword"
++      },
++      "speed": {
++        "title": "2. HOW FAST",
++        "description": "Concurrency, delay, live photos"
++      },
++      "storage": {
++        "title": "3. WHERE",
++        "description": "Data folder and database"
++      },
++      "proxy": {
++        "title": "4. CHANGE IP",
++        "description": "Proxy pool and credentials"
++      },
++      "platform": {
++        "title": "5. PLATFORM ONLY",
++        "description": "Options specific to this platform"
++      },
++      "wordcloud": {
++        "title": "6. WORD CLOUD",
++        "description": "Custom words, stop words, font"
++      }
++    },
++    "field": {
++      "maxNotes": "Max notes/videos per keyword",
++      "maxNotesHint": "Counted per keyword, so several keywords multiply. Defaults to the ceiling (1,000,000) = until the platform stops returning results; empty = program default (15)",
++      "maxComments": "Max top-level comments per note",
++      "maxCommentsHint": "Only limits top-level comments; replies are uncapped. Defaults to the ceiling (1,000,000); empty = program default (10)",
++      "maxConcurrency": "Concurrency",
++      "maxConcurrencyHint": "Requests in flight at once. 1 is safest; higher is faster and more likely to be rate limited (max 32)",
++      "sleepSec": "Delay per page (seconds)",
++      "sleepSecHint": "Wait between pages; 0 = no wait (easier to get rate limited)",
++      "downloadLivePhoto": "Download the video attached to live photos",
++      "downloadLivePhotoHint": "Requires DOWNLOAD_MEDIA above",
++      "saveDataPath": "Data directory",
++      "saveDataPathHint": "Empty = the project's data folder",
++      "saveDataPathPlaceholder": "e.g. D:\\crawler-data\\data",
++      "dbHint": "Save format is {{format}}; the connection below is written into the backend config",
++      "dbHost": "Host",
++      "dbPort": "Port",
++      "dbUser": "User",
++      "dbPassword": "Password",
++      "dbName": "Database",
++      "enableIpProxy": "Enable IP proxy",
++      "enableIpProxyHint": "Rotate IPs through a proxy pool to reduce rate limiting",
++      "ipProxyProvider": "Provider",
++      "ipProxyPoolCount": "Pool size",
++      "ipProxyPoolCountHint": "How many IPs to fetch at once",
++      "staticProxyUrl": "Static proxy URL",
++      "staticProxyUrlHint": "Like http://user:pass@host:port",
++      "proxyCredentialsHint": "Find these in your provider dashboard; used only for this run, never written to project files",
++      "kdlSecretId": "Kuaidaili secret_id",
++      "kdlSignature": "Kuaidaili signature",
++      "kdlUserName": "Kuaidaili user name",
++      "kdlUserPwd": "Kuaidaili password",
++      "wandouAppKey": "WandouHTTP app_key",
++      "xhsSort": "Sort order",
++      "xhsSortHint": "How Xiaohongshu search results are ordered",
++      "dyPublishTime": "Publish time range",
++      "dyPublishTimeHint": "Only crawl videos published inside this range; the platform offers these four presets only",
++      "biliSearchMode": "Search mode",
++      "biliSearchModeHint": "Normal search ignores dates; the other two page day by day inside the date range",
++      "biliStartDay": "Start date",
++      "biliEndDay": "End date",
++      "biliQn": "Video quality",
++      "biliQnHint": "Quality used when downloading videos; higher may fail",
++      "biliMaxNotesPerDay": "Max notes per day",
++      "biliMaxNotesPerDayHint": "Both time-range modes cap each day with this number (normal search ignores it)",
++      "weiboFullText": "Crawl full Weibo text",
++      "weiboFullTextHint": "Uncheck to crawl the summary only",
++      "noPlatformOptions": "{{platform}} has no platform-only options; the shared options above apply",
++      "customWords": "Custom words",
++      "customWordsHint": "Format \"word:group\", comma separated; keeps domain terms from being split",
++      "customWordsPlaceholder": "e.g. 零几:年份, 高频词:专业术语",
++      "stopWordsFile": "Stop words file",
++      "stopWordsFileHint": "One word per line, default docs/hit_stopwords.txt",
++      "fontPath": "Font file",
++      "fontPathHint": "Chinese word clouds need a Chinese font, default docs/STZHONGS.TTF"
++    },
++    "option": {
++      "unlimitedShort": "max",
++      "xhsSortGeneral": "General",
++      "xhsSortPopular": "Most popular",
++      "xhsSortLatest": "Latest",
++      "dyTimeAll": "Any time",
++      "dyTimeDay": "Last day",
++      "dyTimeWeek": "Last week",
++      "dyTimeHalfYear": "Last 6 months",
++      "biliModeNormal": "Normal search (no dates)",
++      "biliModeAllInRange": "Crawl inside a time range (day by day)",
++      "biliModeDailyLimit": "Daily limit inside a time range",
++      "qn1080": "1080P",
++      "qn1080Plus": "1080P high bitrate",
++      "qn1080p60": "1080P 60fps",
++      "qn4k": "4K",
++      "proxyKuaidaili": "Kuaidaili",
++      "proxyWandouhttp": "WandouHTTP",
++      "proxyStatic": "Static proxy (enter the URL yourself)"
++    }
++  },
++  "toast": {
++    "wordcloudAutoComments": "Comment extraction turned on automatically: the word cloud is built from comments",
++    "wordcloudAutoExcel": "Excel export turned on automatically: the word cloud needs JSONL, so you keep the table too",
++    "wordcloudAutoJsonl": "Save format switched to JSONL automatically: word clouds only support JSON/JSONL",
++    "biliDateEmpty": "Bilibili time range is incomplete: pick both a start and an end date",
++    "biliDateRange": "Bilibili time range is reversed: the start date cannot be later than the end date"
+   },
+   "button": {
+     "initiateScan": "INITIATE SCAN",

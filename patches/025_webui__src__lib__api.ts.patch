@@ -1,0 +1,41 @@
+﻿diff --git a/webui/src/lib/api.ts b/webui/src/lib/api.ts
+index ca49d52..89a2184 100644
+--- a/webui/src/lib/api.ts
++++ b/webui/src/lib/api.ts
+@@ -1,4 +1,6 @@
+ import axios from 'axios'
++import type { CrawlerConfig } from '@/types/crawler'
++import { toStartPayload } from './crawlerRequest'
+ 
+ const api = axios.create({
+   baseURL: '/api',
+@@ -9,20 +11,6 @@ const api = axios.create({
+ })
+ 
+ // Types
+-export interface CrawlerConfig {
+-  platform: string
+-  login_type: string
+-  crawler_type: string
+-  keywords: string
+-  start_page: number
+-  enable_comments: boolean
+-  enable_sub_comments: boolean
+-  enable_media: boolean
+-  save_option: string
+-  cookies: string
+-  headless: boolean
+-}
+-
+ export interface CrawlerStatus {
+   status: 'idle' | 'running' | 'stopping' | 'error'
+   platform: string | null
+@@ -66,7 +54,7 @@ export interface ConfigOption {
+ 
+ // API functions
+ export const crawlerApi = {
+-  start: (config: CrawlerConfig) => api.post('/crawler/start', config),
++  start: (config: CrawlerConfig) => api.post('/crawler/start', toStartPayload(config)),
+   stop: () => api.post('/crawler/stop'),
+   getStatus: () => api.get<CrawlerStatus>('/crawler/status'),
+   getLogs: (limit = 100) => api.get<{ logs: LogEntry[] }>('/crawler/logs', { params: { limit } }),

@@ -1,0 +1,31 @@
+﻿diff --git a/tools/words.py b/tools/words.py
+index daa1020..c4b5ae5 100644
+--- a/tools/words.py
++++ b/tools/words.py
+@@ -66,19 +66,21 @@ class AsyncWordCloudGenerator:
+ 
+     async def generate_word_cloud(self, word_freq, save_words_prefix):
+         await plot_lock.acquire()
+-        top_20_word_freq = {word: freq for word, freq in
+-                            sorted(word_freq.items(), key=lambda item: item[1], reverse=True)[:20]}
++        # Draw from the top 200 words instead of only the top 20, otherwise the
++        # picture looks almost empty (max_words is 200 below).
++        top_words_freq = {word: freq for word, freq in
++                          sorted(word_freq.items(), key=lambda item: item[1], reverse=True)[:200]}
+         wordcloud = WordCloud(
+             font_path=config.FONT_PATH,
+-            width=800,
+-            height=400,
++            width=1600,
++            height=900,
+             background_color='white',
+             max_words=200,
+             stopwords=self.stop_words,
+             colormap='viridis',
+             contour_color='steelblue',
+             contour_width=1
+-        ).generate_from_frequencies(top_20_word_freq)
++        ).generate_from_frequencies(top_words_freq)
+ 
+         # Save word cloud image
+         plt.figure(figsize=(10, 5), facecolor='white')

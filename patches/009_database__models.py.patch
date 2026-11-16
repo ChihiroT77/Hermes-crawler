@@ -1,0 +1,61 @@
+﻿diff --git a/database/models.py b/database/models.py
+index 773478f..a337fe0 100644
+--- a/database/models.py
++++ b/database/models.py
+@@ -68,6 +68,13 @@ class BilibiliVideoComment(Base):
+     sub_comment_count = Column(Text, comment='子评论数')
+     parent_comment_id = Column(String(255), comment='父评论ID')
+     like_count = Column(Text, default='0', comment='点赞数')
++    # 2026-11-12 追加：账号属性（与微博同名，方便多平台并表；平台没给的真实留空）
++    comment_source = Column(String(255), comment='属地原文(member 无, 取 reply_control.location)')
++    ip_location = Column(String(64), comment='IP 属地(从 reply_control.location 提取)')
++    verification_type = Column(Integer, comment='认证类型(member.official_verify.type: -1无/0个人/1机构)')
++    fans_count = Column(String(32), comment='粉丝数(评论接口不返回, 需按mid单查 relation/stat)')
++    follow_count = Column(String(32), comment='关注数(同上)')
++    register_time = Column(String(64), comment='注册时间(B站不公开, 恒空)')
+ 
+ class BilibiliUpDynamic(Base):
+     __tablename__ = 'bilibili_up_dynamic'
+@@ -122,6 +129,14 @@ class DouyinAwemeComment(Base):
+     parent_comment_id = Column(String(255), comment='父评论ID')
+     like_count = Column(Text, default='0', comment='点赞数')
+     pictures = Column(Text, default='', comment='图片')
++    # --- 账号属性（2026-11-12 新增）---
++    comment_source = Column(String(255), comment='IP属地原文（平台原样给的串）')
++    ip_location = Column(String(64), comment='IP属地')
++    verification_type = Column(Integer, comment='认证类型（抖音为归一化码：-1拿不到/0无认证/1个人认证/2企业机构认证）')
++    verification_desc = Column(String(255), comment='认证文案原文')
++    fans_count = Column(String(32), comment='粉丝数（抖音评论接口不返回，留空）')
++    follow_count = Column(String(32), comment='关注数（抖音评论接口不返回，留空）')
++    register_time = Column(String(64), comment='注册时间（抖音不公开，留空）')
+ 
+ class KuaishouVideo(Base):
+     __tablename__ = 'kuaishou_video'
+@@ -187,6 +202,13 @@ class WeiboNoteComment(Base):
+     comment_like_count = Column(Text, comment='评论点赞数')
+     sub_comment_count = Column(Text, comment='子评论数')
+     parent_comment_id = Column(String(255), comment='父评论ID')
++    # 2026-11-12 追加：账号属性 5 项（平台原始值），与 store/weibo 的 save_comment_item 一一对应
++    comment_source = Column(String(255), comment='评论来源原文(形如「来自 江苏」/「来自 iPhone客户端」)')
++    ip_location = Column(String(64), comment='IP 属地(从 source 取省份, 取不到留空)')
++    verification_type = Column(Integer, comment='认证类型(平台原值: -1 无 / 0 个人 / 1 政府 / 2 企业 / 3 媒体 / 4 校园 / 5 团体)')
++    fans_count = Column(String(32), comment='粉丝数(平台原值)')
++    follow_count = Column(String(32), comment='关注数(平台原值)')
++    register_time = Column(String(64), comment='注册时间(评论接口不提供, 需 /ajax/profile/detail 单查)')
+ 
+ class XhsNote(Base):
+     __tablename__ = 'xhs_note'
+@@ -262,6 +284,13 @@ class TiebaComment(Base):
+     sub_comment_count = Column(Integer, default=0, comment='子评论数')
+     note_id = Column(String(255), index=True, comment='笔记ID')
+     note_url = Column(Text, comment='笔记URL')
++    comment_source = Column(String(255), comment='IP属地原串(如 IP属地:江苏)')
++    ip_location = Column(String(64), comment='IP属地')
++    verification_type = Column(String(32), comment='认证类型')
++    verification_desc = Column(String(255), comment='认证说明原文')
++    fans_count = Column(String(32), comment='粉丝数')
++    follow_count = Column(String(32), comment='关注数')
++    register_time = Column(String(64), comment='注册时间')
+     add_ts = Column(BigInteger, comment='添加时间戳')
+     last_modify_ts = Column(BigInteger, comment='最后修改时间戳')
+ 

@@ -1,0 +1,10 @@
+﻿diff --git a/config/weibo_config.py b/config/weibo_config.py
+index 6a561b1..a4acee5 100644
+--- a/config/weibo_config.py
++++ b/config/weibo_config.py
+@@ -37,4 +37,4 @@ WEIBO_CREATOR_ID_LIST = [
+ 
+ # Whether to enable the function of crawling the full text of Weibo. It is enabled by default.
+ # If turned on, it will increase the probability of being risk controlled, which is equivalent to a keyword search request that will traverse all posts and request the post details again.
+-ENABLE_WEIBO_FULL_TEXT = True
++ENABLE_WEIBO_FULL_TEXT = True  # [本任务临时修改 2026-11-10] 用户授权：评论采集无需帖子全文，减少每页约10次详情请求；原值 = True，任务结束后恢复 [2026-11-12 任务结束，已恢复原值 True]

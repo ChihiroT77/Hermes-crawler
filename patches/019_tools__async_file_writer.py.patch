@@ -1,0 +1,61 @@
+﻿diff --git a/tools/async_file_writer.py b/tools/async_file_writer.py
+index d5397ad..24ab8be 100644
+--- a/tools/async_file_writer.py
++++ b/tools/async_file_writer.py
+@@ -21,6 +21,7 @@ import csv
+ import json
+ import os
+ import pathlib
++import threading
+ from typing import Dict, List
+ import aiofiles
+ import config
+@@ -28,6 +29,22 @@ from tools.utils import utils
+ from tools.words import AsyncWordCloudGenerator
+ 
+ class AsyncFileWriter:
++    # 按文件路径共享的跨实例锁：store 层每次落库都会 new 一个 AsyncFileWriter，
++    # 实例级 self.lock 无法串行化不同实例对同一文件的并发追加。
++    # Windows CRT 的 'a' 模式是"seek 到末尾再写"两步动作，不加跨实例锁会中段互相覆盖，
++    # 产生半截坏行（已实测复现：1182 行并发追加坏 2 行）。
++    _path_locks: Dict[str, asyncio.Lock] = {}
++    _registry_guard = threading.Lock()
++
++    @classmethod
++    def _get_path_lock(cls, file_path: str) -> asyncio.Lock:
++        with cls._registry_guard:
++            lock = cls._path_locks.get(file_path)
++            if lock is None:
++                lock = asyncio.Lock()
++                cls._path_locks[file_path] = lock
++            return lock
++
+     def __init__(self, platform: str, crawler_type: str):
+         self.lock = asyncio.Lock()
+         self.platform = platform
+@@ -45,7 +62,7 @@ class AsyncFileWriter:
+ 
+     async def write_to_csv(self, item: Dict, item_type: str):
+         file_path = self._get_file_path('csv', item_type)
+-        async with self.lock:
++        async with self._get_path_lock(file_path):
+             file_exists = os.path.exists(file_path)
+             async with aiofiles.open(file_path, 'a', newline='', encoding='utf-8-sig') as f:
+                 writer = csv.DictWriter(f, fieldnames=item.keys())
+@@ -55,13 +72,14 @@ class AsyncFileWriter:
+ 
+     async def write_to_jsonl(self, item: Dict, item_type: str):
+         file_path = self._get_file_path('jsonl', item_type)
+-        async with self.lock:
++        async with self._get_path_lock(file_path):
+             async with aiofiles.open(file_path, 'a', encoding='utf-8') as f:
+                 await f.write(json.dumps(item, ensure_ascii=False) + '\n')
++                await f.flush()  # 确保字节在锁释放前已落盘
+ 
+     async def write_single_item_to_json(self, item: Dict, item_type: str):
+         file_path = self._get_file_path('json', item_type)
+-        async with self.lock:
++        async with self._get_path_lock(file_path):
+             existing_data = []
+             if os.path.exists(file_path) and os.path.getsize(file_path) > 0:
+                 async with aiofiles.open(file_path, 'r', encoding='utf-8') as f:
